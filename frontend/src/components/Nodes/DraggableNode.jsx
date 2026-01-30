@@ -1,24 +1,47 @@
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import { useNodeStore } from '../../store/useNodeStore';
 
 export default function DraggableNode({ node, children }) {
-    const { updateNodeLocal, updateNode, selectNode, selectedNode } = useNodeStore();
+    const { updateNodeLocal, updateNode, selectNode, selectedNode, deselectNode } = useNodeStore();
     const nodeRef = useRef(null);
     const isDraggingRef = useRef(false);
     const isResizingRef = useRef(false);
     const dragStartPos = useRef({ x: 0, y: 0 });
     const resizeStartData = useRef(null);
+    const [isEditMode, setIsEditMode] = useState(false);
 
     const isSelected = selectedNode?._id === node._id;
 
-    // Drag handlers
+    // Double-click to enable edit mode (drag & resize)
+    const handleDoubleClick = (e) => {
+        e.stopPropagation();
+        setIsEditMode(true);
+        selectNode(node);
+    };
+
+    // Click outside to disable edit mode
+    useEffect(() => {
+        const handleClickOutside = (e) => {
+            if (nodeRef.current && !nodeRef.current.contains(e.target)) {
+                setIsEditMode(false);
+            }
+        };
+
+        if (isEditMode) {
+            document.addEventListener('mousedown', handleClickOutside);
+            return () => document.removeEventListener('mousedown', handleClickOutside);
+        }
+    }, [isEditMode]);
+
+    // Drag handlers - only work in edit mode
     const handleMouseDown = (e) => {
+        if (!isEditMode) return; // Only drag in edit mode
         if (e.target.closest('.resize-handle') || e.target.closest('.no-drag')) return;
         if (e.button !== 0) return; // Only left click
 
         e.preventDefault();
+        e.stopPropagation();
         isDraggingRef.current = true;
-        selectNode(node);
 
         dragStartPos.current = {
             x: e.clientX - node.position.x,
@@ -140,7 +163,7 @@ export default function DraggableNode({ node, children }) {
     return (
         <div
             ref={nodeRef}
-            className={`absolute card cursor-move select-none transition-shadow ${isSelected ? 'ring-2 ring-black dark:ring-white shadow-lg' : ''
+            className={`absolute card select-none transition-shadow ${isEditMode ? 'cursor-move ring-2 ring-blue-500 dark:ring-blue-400 shadow-lg' : 'cursor-default'
                 } ${isDraggingRef.current || isResizingRef.current ? 'dragging' : ''}`}
             style={{
                 left: node.position.x,
@@ -151,27 +174,28 @@ export default function DraggableNode({ node, children }) {
                 backgroundColor: node.style?.backgroundColor,
             }}
             onMouseDown={handleMouseDown}
+            onDoubleClick={handleDoubleClick}
         >
             {children}
 
-            {/* Resize handles */}
-            {isSelected && (
+            {/* Resize handles - only in edit mode */}
+            {isEditMode && (
                 <>
                     {/* Corner handles */}
                     <div
-                        className="resize-handle absolute -bottom-1 -right-1 w-3 h-3 bg-black dark:bg-white rounded-full cursor-se-resize"
+                        className="resize-handle absolute -bottom-1 -right-1 w-3 h-3 bg-blue-500 dark:bg-blue-400 rounded-full cursor-se-resize"
                         onMouseDown={(e) => handleResizeStart(e, 'se')}
                     />
                     <div
-                        className="resize-handle absolute -top-1 -right-1 w-3 h-3 bg-black dark:bg-white rounded-full cursor-ne-resize"
+                        className="resize-handle absolute -top-1 -right-1 w-3 h-3 bg-blue-500 dark:bg-blue-400 rounded-full cursor-ne-resize"
                         onMouseDown={(e) => handleResizeStart(e, 'ne')}
                     />
                     <div
-                        className="resize-handle absolute -bottom-1 -left-1 w-3 h-3 bg-black dark:bg-white rounded-full cursor-sw-resize"
+                        className="resize-handle absolute -bottom-1 -left-1 w-3 h-3 bg-blue-500 dark:bg-blue-400 rounded-full cursor-sw-resize"
                         onMouseDown={(e) => handleResizeStart(e, 'sw')}
                     />
                     <div
-                        className="resize-handle absolute -top-1 -left-1 w-3 h-3 bg-black dark:bg-white rounded-full cursor-nw-resize"
+                        className="resize-handle absolute -top-1 -left-1 w-3 h-3 bg-blue-500 dark:bg-blue-400 rounded-full cursor-nw-resize"
                         onMouseDown={(e) => handleResizeStart(e, 'nw')}
                     />
 
