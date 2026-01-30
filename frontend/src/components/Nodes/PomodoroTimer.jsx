@@ -6,7 +6,7 @@ export default function PomodoroTimer({ node }) {
     const { updateNodeLocal, updateNode } = useNodeStore();
 
     // Initialize content with defaults
-    const content = {
+    const initialContent = {
         workDuration: node.content?.workDuration ?? 25,
         breakDuration: node.content?.breakDuration ?? 5,
         soundEnabled: node.content?.soundEnabled ?? true,
@@ -16,25 +16,39 @@ export default function PomodoroTimer({ node }) {
         sessionsCompleted: node.content?.sessionsCompleted ?? 0
     };
 
+    // Use state to track content so auto-save can see changes
+    const [content, setContent] = useState(initialContent);
     const [showSettings, setShowSettings] = useState(false);
-    const [workMinutes, setWorkMinutes] = useState(content.workDuration);
-    const [breakMinutes, setBreakMinutes] = useState(content.breakDuration);
     const timerRef = useRef(null);
+
+    // Update content when node.content changes (from external updates)
+    useEffect(() => {
+        if (node.content) {
+            setContent({
+                workDuration: node.content?.workDuration ?? 25,
+                breakDuration: node.content?.breakDuration ?? 5,
+                soundEnabled: node.content?.soundEnabled ?? true,
+                currentMode: node.content?.currentMode ?? 'work',
+                timeLeft: node.content?.timeLeft ?? (25 * 60),
+                isRunning: node.content?.isRunning ?? false,
+                sessionsCompleted: node.content?.sessionsCompleted ?? 0
+            });
+        }
+    }, [node.content]);
 
     // Timer countdown logic
     useEffect(() => {
         if (content.isRunning && content.timeLeft > 0) {
             timerRef.current = setInterval(() => {
-                const newTimeLeft = content.timeLeft - 1;
+                setContent(prev => {
+                    const newTimeLeft = prev.timeLeft - 1;
 
-                if (newTimeLeft <= 0) {
-                    // Timer finished
-                    handleTimerComplete();
-                } else {
-                    updateNodeLocal(node._id, {
-                        content: { ...content, timeLeft: newTimeLeft }
-                    });
-                }
+                    if (newTimeLeft <= 0) {
+                        // Timer finished - will be handled by useEffect below
+                        return { ...prev, timeLeft: 0, isRunning: false };
+                    }
+                    return { ...prev, timeLeft: newTimeLeft };
+                });
             }, 1000);
         } else {
             if (timerRef.current) {
@@ -48,46 +62,49 @@ export default function PomodoroTimer({ node }) {
                 clearInterval(timerRef.current);
             }
         };
-    }, [content.isRunning, content.timeLeft]);
+    }, [content.isRunning]);
 
-    // Auto-save to DB (less frequent to avoid spam)
+    // Handle timer completion
     useEffect(() => {
-        const timer = setTimeout(() => {
-            updateNode(node._id, { content });
-        }, 2000);
-        return () => clearTimeout(timer);
-    }, [content]);
+        if (content.timeLeft === 0 && !content.isRunning) {
+            // Play sound if enabled
+            if (content.soundEnabled) {
+                playBeep();
+            }
 
-    const handleTimerComplete = () => {
-        // Play sound if enabled
-        if (content.soundEnabled) {
-            playBeep();
-        }
-
-        // Switch mode and reset timer
-        if (content.currentMode === 'work') {
-            // Completed a work session -> go to break
-            updateNodeLocal(node._id, {
-                content: {
+            // Switch mode and reset timer
+            if (content.currentMode === 'work') {
+                // Completed a work session -> go to break
+                const newContent = {
                     ...content,
                     currentMode: 'break',
                     timeLeft: content.breakDuration * 60,
                     isRunning: false,
                     sessionsCompleted: content.sessionsCompleted + 1
-                }
-            });
-        } else {
-            // Completed break -> go back to work
-            updateNodeLocal(node._id, {
-                content: {
+                };
+                setContent(newContent);
+                updateNode(node._id, { content: newContent });
+            } else if (content.currentMode === 'break') {
+                // Completed break -> go back to work
+                const newContent = {
                     ...content,
                     currentMode: 'work',
                     timeLeft: content.workDuration * 60,
                     isRunning: false
-                }
-            });
+                };
+                setContent(newContent);
+                updateNode(node._id, { content: newContent });
+            }
         }
-    };
+    }, [content.timeLeft, content.isRunning]);
+
+    // Auto-save to DB when content changes
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            updateNode(node._id, { content });
+        }, 1000); // 1 second debounce
+        return () => clearTimeout(timer);
+    }, [content]);
 
     const playBeep = () => {
         try {
@@ -109,45 +126,48 @@ export default function PomodoroTimer({ node }) {
     };
 
     const toggleTimer = () => {
-        updateNodeLocal(node._id, {
-            content: { ...content, isRunning: !content.isRunning }
-        });
+        const newContent = { ...content, isRunning: !content.isRunning };
+        setContent(newContent);
+        // Save immediately when toggling
+        updateNode(node._id, { content: newContent });
     };
 
     const resetTimer = () => {
         const duration = content.currentMode === 'work' ? content.workDuration : content.breakDuration;
-        updateNodeLocal(node._id, {
-            content: {
-                ...content,
-                timeLeft: duration * 60,
-                isRunning: false
-            }
-        });
+        const newContent = {
+            ...content,
+            timeLeft: duration * 60,
+            isRunning: false
+        };
+        setContent(newContent);
+        // Save immediately when resetting
+        updateNode(node._id, { content: newContent });
     };
 
     const toggleSound = () => {
-        updateNodeLocal(node._id, {
-            content: { ...content, soundEnabled: !content.soundEnabled }
-        });
+        const newContent = { ...content, soundEnabled: !content.soundEnabled };
+        setContent(newContent);
+        updateNode(node._id, { content: newContent });
     };
 
-    const applySettings = () => {
-        const newWorkDuration = Math.max(1, Math.min(60, workMinutes));
-        const newBreakDuration = Math.max(1, Math.min(60, breakMinutes));
+    const applySettings = (newWorkDuration, newBreakDuration) => {
+        const workDuration = Math.max(1, Math.min(120, newWorkDuration));
+        const breakDuration = Math.max(1, Math.min(120, newBreakDuration));
 
-        updateNodeLocal(node._id, {
-            content: {
-                ...content,
-                workDuration: newWorkDuration,
-                breakDuration: newBreakDuration,
-                // Reset timer if settings changed
-                timeLeft: content.currentMode === 'work'
-                    ? newWorkDuration * 60
-                    : newBreakDuration * 60,
-                isRunning: false
-            }
-        });
+        const newContent = {
+            ...content,
+            workDuration,
+            breakDuration,
+            // Reset timer with new duration
+            timeLeft: content.currentMode === 'work'
+                ? workDuration * 60
+                : breakDuration * 60,
+            isRunning: false
+        };
 
+        setContent(newContent);
+        // Save immediately when applying settings
+        updateNode(node._id, { content: newContent });
         setShowSettings(false);
     };
 
@@ -162,7 +182,7 @@ export default function PomodoroTimer({ node }) {
     const totalTime = content.currentMode === 'work'
         ? content.workDuration * 60
         : content.breakDuration * 60;
-    const progress = ((totalTime - content.timeLeft) / totalTime) * 100;
+    const progress = totalTime > 0 ? ((totalTime - content.timeLeft) / totalTime) * 100 : 0;
 
     const modeColor = content.currentMode === 'work'
         ? 'text-red-500 dark:text-red-400'
@@ -203,42 +223,12 @@ export default function PomodoroTimer({ node }) {
 
             {/* Settings Panel */}
             {showSettings && (
-                <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
-                    <div className="space-y-3">
-                        <div>
-                            <label className="text-sm font-medium block mb-1">
-                                Work Duration (min)
-                            </label>
-                            <input
-                                type="number"
-                                value={workMinutes}
-                                onChange={(e) => setWorkMinutes(parseInt(e.target.value) || 25)}
-                                min="1"
-                                max="60"
-                                className="w-full px-3 py-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800"
-                            />
-                        </div>
-                        <div>
-                            <label className="text-sm font-medium block mb-1">
-                                Break Duration (min)
-                            </label>
-                            <input
-                                type="number"
-                                value={breakMinutes}
-                                onChange={(e) => setBreakMinutes(parseInt(e.target.value) || 5)}
-                                min="1"
-                                max="60"
-                                className="w-full px-3 py-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800"
-                            />
-                        </div>
-                        <button
-                            onClick={applySettings}
-                            className="w-full py-2 bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors"
-                        >
-                            Apply Settings
-                        </button>
-                    </div>
-                </div>
+                <SettingsPanel
+                    workDuration={content.workDuration}
+                    breakDuration={content.breakDuration}
+                    onApply={applySettings}
+                    onCancel={() => setShowSettings(false)}
+                />
             )}
 
             {/* Timer Display */}
@@ -285,8 +275,8 @@ export default function PomodoroTimer({ node }) {
                 <button
                     onClick={toggleTimer}
                     className={`px-6 py-3 rounded-lg flex items-center gap-2 transition-colors ${content.isRunning
-                        ? 'bg-yellow-500 hover:bg-yellow-600 text-white'
-                        : 'bg-green-500 hover:bg-green-600 text-white'
+                            ? 'bg-yellow-500 hover:bg-yellow-600 text-white'
+                            : 'bg-green-500 hover:bg-green-600 text-white'
                         }`}
                 >
                     {content.isRunning ? (
@@ -308,6 +298,59 @@ export default function PomodoroTimer({ node }) {
                     <RotateCcw size={20} />
                     Reset
                 </button>
+            </div>
+        </div>
+    );
+}
+
+// Settings Panel Component
+function SettingsPanel({ workDuration, breakDuration, onApply, onCancel }) {
+    const [work, setWork] = useState(workDuration);
+    const [breakTime, setBreakTime] = useState(breakDuration);
+
+    return (
+        <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
+            <div className="space-y-3">
+                <div>
+                    <label className="text-sm font-medium block mb-1">
+                        Work Duration (minutes)
+                    </label>
+                    <input
+                        type="number"
+                        value={work}
+                        onChange={(e) => setWork(parseInt(e.target.value) || 25)}
+                        min="1"
+                        max="120"
+                        className="w-full px-3 py-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                    />
+                </div>
+                <div>
+                    <label className="text-sm font-medium block mb-1">
+                        Break Duration (minutes)
+                    </label>
+                    <input
+                        type="number"
+                        value={breakTime}
+                        onChange={(e) => setBreakTime(parseInt(e.target.value) || 5)}
+                        min="1"
+                        max="120"
+                        className="w-full px-3 py-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                    />
+                </div>
+                <div className="flex gap-2">
+                    <button
+                        onClick={() => onApply(work, breakTime)}
+                        className="flex-1 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors"
+                    >
+                        Apply
+                    </button>
+                    <button
+                        onClick={onCancel}
+                        className="flex-1 py-2 bg-gray-300 dark:bg-gray-600 hover:bg-gray-400 dark:hover:bg-gray-500 text-gray-900 dark:text-gray-100 rounded transition-colors"
+                    >
+                        Cancel
+                    </button>
+                </div>
             </div>
         </div>
     );
