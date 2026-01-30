@@ -47,52 +47,28 @@ export default function BoardCanvas({ boardId }) {
         }
     }, [zoomIn, zoomOut]);
 
-    // Pan with left click on empty canvas area
-    const handleCanvasMouseDown = (e) => {
-        // Only pan on left click when clicking the nodes container itself (not a child like a node)
-        if (e.button === 0 && (e.target.classList.contains('nodes-container') || e.target.classList.contains('canvas-bg'))) {
-            e.preventDefault();
-            e.stopPropagation();
-            isPanningRef.current = true;
-            panStartRef.current = { x: e.clientX, y: e.clientY };
-            document.body.style.cursor = 'grabbing';
-
-            // Add global listeners for smooth panning
-            document.addEventListener('mousemove', handleMouseMoveGlobal);
-            document.addEventListener('mouseup', handleMouseUpGlobal);
-        }
-    };
-
-    const handleMouseMoveGlobal = (e) => {
-        if (isPanningRef.current) {
-            e.preventDefault();
-            const deltaX = e.clientX - panStartRef.current.x;
-            const deltaY = e.clientY - panStartRef.current.y;
-            pan(deltaX, deltaY);
-            panStartRef.current = { x: e.clientX, y: e.clientY };
-        }
-    };
-
-    const handleMouseUpGlobal = () => {
-        if (isPanningRef.current) {
-            isPanningRef.current = false;
-            document.body.style.cursor = '';
-
-            // Remove global listeners
-            document.removeEventListener('mousemove', handleMouseMoveGlobal);
-            document.removeEventListener('mouseup', handleMouseUpGlobal);
-        }
-    };
-
-    // Cleanup on unmount
+    // Two-finger touchpad pan (scroll without Ctrl)
     useEffect(() => {
-        return () => {
-            document.body.style.cursor = '';
-            // Cleanup global listeners in case component unmounts while panning
-            document.removeEventListener('mousemove', handleMouseMoveGlobal);
-            document.removeEventListener('mouseup', handleMouseUpGlobal);
+        const handleWheel = (e) => {
+            // If Ctrl/Cmd is pressed, it's zoom (handled above)
+            if (e.ctrlKey || e.metaKey) {
+                return;
+            }
+
+            // Otherwise it's two-finger pan on touchpad
+            e.preventDefault();
+
+            // deltaX and deltaY represent the scroll amount
+            // Negative because we want natural scrolling
+            pan(-e.deltaX, -e.deltaY);
         };
-    }, []);
+
+        const canvas = canvasRef.current;
+        if (canvas) {
+            canvas.addEventListener('wheel', handleWheel, { passive: false });
+            return () => canvas.removeEventListener('wheel', handleWheel);
+        }
+    }, [pan]);
 
     // Render node component based on type
     const renderNodeContent = (node) => {
@@ -256,7 +232,6 @@ export default function BoardCanvas({ boardId }) {
         <div
             className="flex-1 relative overflow-hidden"
             ref={canvasRef}
-            onMouseDown={handleCanvasMouseDown}
         >
             {/* Zoom controls */}
             <div className="absolute top-4 right-4 z-40 flex flex-col gap-2">
@@ -307,7 +282,6 @@ export default function BoardCanvas({ boardId }) {
                     transformOrigin: '0 0',
                 }}
                 onClick={handleCanvasClick}
-                onMouseDown={handleCanvasMouseDown}
             >
                 {nodes.length === 0 && (
                     <div
@@ -320,7 +294,7 @@ export default function BoardCanvas({ boardId }) {
                         <div className="text-center text-light-text-secondary dark:text-dark-text-secondary">
                             <p className="text-lg mb-2">Empty board</p>
                             <p className="text-sm">Click the + button to add a node</p>
-                            <p className="text-xs mt-2">Ctrl + Scroll to zoom • Click & Drag to pan</p>
+                            <p className="text-xs mt-2">Ctrl + Scroll to zoom • Two fingers to pan</p>
                         </div>
                     </div>
                 )}
