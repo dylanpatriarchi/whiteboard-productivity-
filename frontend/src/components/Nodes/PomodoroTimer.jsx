@@ -275,8 +275,8 @@ export default function PomodoroTimer({ node }) {
                 <button
                     onClick={toggleTimer}
                     className={`px-6 py-3 rounded-lg flex items-center gap-2 transition-colors ${content.isRunning
-                            ? 'bg-yellow-500 hover:bg-yellow-600 text-white'
-                            : 'bg-green-500 hover:bg-green-600 text-white'
+                        ? 'bg-yellow-500 hover:bg-yellow-600 text-white'
+                        : 'bg-green-500 hover:bg-green-600 text-white'
                         }`}
                 >
                     {content.isRunning ? (
@@ -305,8 +305,30 @@ export default function PomodoroTimer({ node }) {
 
 // Settings Panel Component
 function SettingsPanel({ workDuration, breakDuration, onApply, onCancel }) {
-    const [work, setWork] = useState(workDuration);
-    const [breakTime, setBreakTime] = useState(breakDuration);
+    const [work, setWork] = useState(workDuration.toString());
+    const [breakTime, setBreakTime] = useState(breakDuration.toString());
+
+    const handleWorkChange = (e) => {
+        const value = e.target.value;
+        // Allow only numbers
+        if (value === '' || /^\d+$/.test(value)) {
+            setWork(value);
+        }
+    };
+
+    const handleBreakChange = (e) => {
+        const value = e.target.value;
+        // Allow only numbers
+        if (value === '' || /^\d+$/.test(value)) {
+            setBreakTime(value);
+        }
+    };
+
+    const handleApply = () => {
+        const workNum = parseInt(work) || 25;
+        const breakNum = parseInt(breakTime) || 5;
+        onApply(workNum, breakNum);
+    };
 
     return (
         <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
@@ -316,11 +338,10 @@ function SettingsPanel({ workDuration, breakDuration, onApply, onCancel }) {
                         Work Duration (minutes)
                     </label>
                     <input
-                        type="number"
+                        type="text"
                         value={work}
-                        onChange={(e) => setWork(parseInt(e.target.value) || 25)}
-                        min="1"
-                        max="120"
+                        onChange={handleWorkChange}
+                        placeholder="25"
                         className="w-full px-3 py-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
                     />
                 </div>
@@ -329,17 +350,16 @@ function SettingsPanel({ workDuration, breakDuration, onApply, onCancel }) {
                         Break Duration (minutes)
                     </label>
                     <input
-                        type="number"
+                        type="text"
                         value={breakTime}
-                        onChange={(e) => setBreakTime(parseInt(e.target.value) || 5)}
-                        min="1"
-                        max="120"
+                        onChange={handleBreakChange}
+                        placeholder="5"
                         className="w-full px-3 py-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
                     />
                 </div>
                 <div className="flex gap-2">
                     <button
-                        onClick={() => onApply(work, breakTime)}
+                        onClick={handleApply}
                         className="flex-1 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors"
                     >
                         Apply
