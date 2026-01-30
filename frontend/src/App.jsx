@@ -5,23 +5,46 @@ import { useBoardStore } from './store/useBoardStore';
 
 function App() {
     const { boards, fetchBoards, createBoard } = useBoardStore();
-    const [currentBoardId, setCurrentBoardId] = useState(null);
+    const [currentBoardId, setCurrentBoardId] = useState(() => {
+        // Try to restore from localStorage
+        return localStorage.getItem('currentBoardId') || null;
+    });
+
+    // Save currentBoardId to localStorage whenever it changes
+    useEffect(() => {
+        if (currentBoardId) {
+            localStorage.setItem('currentBoardId', currentBoardId);
+        }
+    }, [currentBoardId]);
 
     useEffect(() => {
         // Fetch boards on mount
         fetchBoards();
-    }, []);
+    }, [fetchBoards]);
 
     useEffect(() => {
-        // Auto-create a board if none exist
-        if (boards.length === 0 && !currentBoardId) {
-            createBoard({ title: 'My First Board' }).then((board) => {
-                setCurrentBoardId(board._id);
-            });
-        } else if (boards.length > 0 && !currentBoardId) {
-            setCurrentBoardId(boards[0]._id);
+        // Use existing board or create one if none exist
+        if (boards.length > 0) {
+            // Check if saved board still exists
+            if (currentBoardId) {
+                const boardExists = boards.some(b => b._id === currentBoardId);
+                if (!boardExists) {
+                    // Saved board doesn't exist anymore, use first board
+                    setCurrentBoardId(boards[0]._id);
+                }
+            } else {
+                // No saved board, use first available
+                setCurrentBoardId(boards[0]._id);
+            }
+        } else {
+            // Only create a new board if truly none exist
+            if (!currentBoardId) {
+                createBoard({ title: 'My First Board' }).then((board) => {
+                    setCurrentBoardId(board._id);
+                });
+            }
         }
-    }, [boards]);
+    }, [boards, currentBoardId, createBoard]);
 
     return (
         <div className="h-screen flex flex-col">

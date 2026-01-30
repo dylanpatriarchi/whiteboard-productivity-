@@ -47,24 +47,25 @@ export default function BoardCanvas({ boardId }) {
         }
     }, [zoomIn, zoomOut]);
 
-    // Pan with Space + drag or Middle mouse button
+    // Pan with Middle mouse button only
     const handleCanvasMouseDown = (e) => {
-        // Middle mouse button (1) or left mouse (0) with space key
-        if (e.button === 1 || (e.button === 0 && (e.spaceKey || isPanningRef.spacePressed))) {
+        // Middle mouse button only
+        if (e.button === 1) {
             e.preventDefault();
+            e.stopPropagation();
             isPanningRef.current = true;
             panStartRef.current = { x: e.clientX, y: e.clientY };
             document.body.style.cursor = 'grabbing';
 
-            // Prevent default middle mouse scroll
-            if (e.button === 1) {
-                e.stopPropagation();
-            }
+            // Add global listeners for smooth panning
+            document.addEventListener('mousemove', handleMouseMoveGlobal);
+            document.addEventListener('mouseup', handleMouseUpGlobal);
         }
     };
 
-    const handleCanvasMouseMove = (e) => {
+    const handleMouseMoveGlobal = (e) => {
         if (isPanningRef.current) {
+            e.preventDefault();
             const deltaX = e.clientX - panStartRef.current.x;
             const deltaY = e.clientY - panStartRef.current.y;
             pan(deltaX, deltaY);
@@ -72,44 +73,24 @@ export default function BoardCanvas({ boardId }) {
         }
     };
 
-    const handleCanvasMouseUp = (e) => {
+    const handleMouseUpGlobal = () => {
         if (isPanningRef.current) {
             isPanningRef.current = false;
-            document.body.style.cursor = isPanningRef.spacePressed ? 'grab' : '';
+            document.body.style.cursor = '';
+
+            // Remove global listeners
+            document.removeEventListener('mousemove', handleMouseMoveGlobal);
+            document.removeEventListener('mouseup', handleMouseUpGlobal);
         }
     };
 
-    // Track spacebar for panning
+    // Cleanup on unmount
     useEffect(() => {
-        const handleKeyDown = (e) => {
-            if (e.code === 'Space' && !e.repeat) {
-                // Don't interfere with input fields
-                if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
-                    return;
-                }
-
-                e.preventDefault();
-                isPanningRef.spacePressed = true;
-                document.body.style.cursor = 'grab';
-            }
-        };
-
-        const handleKeyUp = (e) => {
-            if (e.code === 'Space') {
-                isPanningRef.spacePressed = false;
-                if (!isPanningRef.current) {
-                    document.body.style.cursor = '';
-                }
-            }
-        };
-
-        window.addEventListener('keydown', handleKeyDown);
-        window.addEventListener('keyup', handleKeyUp);
-
         return () => {
-            window.removeEventListener('keydown', handleKeyDown);
-            window.removeEventListener('keyup', handleKeyUp);
             document.body.style.cursor = '';
+            // Cleanup global listeners in case component unmounts while panning
+            document.removeEventListener('mousemove', handleMouseMoveGlobal);
+            document.removeEventListener('mouseup', handleMouseUpGlobal);
         };
     }, []);
 
@@ -276,8 +257,6 @@ export default function BoardCanvas({ boardId }) {
             className="flex-1 relative overflow-hidden"
             ref={canvasRef}
             onMouseDown={handleCanvasMouseDown}
-            onMouseMove={handleCanvasMouseMove}
-            onMouseUp={handleCanvasMouseUp}
         >
             {/* Zoom controls */}
             <div className="absolute top-4 right-4 z-40 flex flex-col gap-2">
@@ -340,7 +319,7 @@ export default function BoardCanvas({ boardId }) {
                         <div className="text-center text-light-text-secondary dark:text-dark-text-secondary">
                             <p className="text-lg mb-2">Empty board</p>
                             <p className="text-sm">Click the + button to add a node</p>
-                            <p className="text-xs mt-2">Ctrl + Scroll to zoom • Space + Drag to pan</p>
+                            <p className="text-xs mt-2">Ctrl + Scroll to zoom • Middle Mouse to pan</p>
                         </div>
                     </div>
                 )}
