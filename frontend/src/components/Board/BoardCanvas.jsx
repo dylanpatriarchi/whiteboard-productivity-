@@ -47,10 +47,10 @@ export default function BoardCanvas({ boardId }) {
         }
     }, [zoomIn, zoomOut]);
 
-    // Pan with Middle mouse button only
+    // Pan with left click on empty canvas area
     const handleCanvasMouseDown = (e) => {
-        // Middle mouse button only
-        if (e.button === 1) {
+        // Only pan on left click when clicking the nodes container itself (not a child like a node)
+        if (e.button === 0 && (e.target.classList.contains('nodes-container') || e.target.classList.contains('canvas-bg'))) {
             e.preventDefault();
             e.stopPropagation();
             isPanningRef.current = true;
@@ -301,12 +301,13 @@ export default function BoardCanvas({ boardId }) {
 
             {/* Nodes container */}
             <div
-                className="absolute inset-0 p-8"
+                className="nodes-container absolute inset-0 p-8"
                 style={{
                     transform: `scale(${scale}) translate(${offsetX / scale}px, ${offsetY / scale}px)`,
                     transformOrigin: '0 0',
                 }}
                 onClick={handleCanvasClick}
+                onMouseDown={handleCanvasMouseDown}
             >
                 {nodes.length === 0 && (
                     <div
@@ -319,7 +320,7 @@ export default function BoardCanvas({ boardId }) {
                         <div className="text-center text-light-text-secondary dark:text-dark-text-secondary">
                             <p className="text-lg mb-2">Empty board</p>
                             <p className="text-sm">Click the + button to add a node</p>
-                            <p className="text-xs mt-2">Ctrl + Scroll to zoom • Middle Mouse to pan</p>
+                            <p className="text-xs mt-2">Ctrl + Scroll to zoom • Click & Drag to pan</p>
                         </div>
                     </div>
                 )}

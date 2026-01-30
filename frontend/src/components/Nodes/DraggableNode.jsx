@@ -78,17 +78,31 @@ export default function DraggableNode({ node, children }) {
     const handleMouseUp = () => {
         if (isDraggingRef.current) {
             isDraggingRef.current = false;
-            // Save to backend
-            updateNode(node._id, {
-                position: node.position,
-            });
+
+            // Get the updated node from store (not the stale prop)
+            const { nodes } = useNodeStore.getState();
+            const updatedNode = nodes.find(n => n._id === node._id);
+
+            if (updatedNode) {
+                // Save to backend with the UPDATED position
+                updateNode(node._id, {
+                    position: updatedNode.position,
+                });
+            }
         } else if (isResizingRef.current) {
             isResizingRef.current = false;
             resizeStartData.current = null;
-            updateNode(node._id, {
-                size: node.size,
-                position: node.position,
-            });
+
+            // Get the updated node from store
+            const { nodes } = useNodeStore.getState();
+            const updatedNode = nodes.find(n => n._id === node._id);
+
+            if (updatedNode) {
+                updateNode(node._id, {
+                    size: updatedNode.size,
+                    position: updatedNode.position,
+                });
+            }
         }
 
         document.removeEventListener('mousemove', handleMouseMove);
