@@ -36,9 +36,6 @@ export default function FloatingAddButton() {
     ];
 
     const handleAddNode = async (type) => {
-        console.log('handleAddNode called with type:', type);
-        console.log('currentBoard:', currentBoard);
-
         if (!currentBoard) {
             console.error('No current board available!');
             return;
@@ -83,11 +80,8 @@ export default function FloatingAddButton() {
             style: {},
         };
 
-        console.log('Creating node with data:', nodeData);
-
         try {
-            const result = await createNode(nodeData);
-            console.log('Node created successfully:', result);
+            await createNode(nodeData);
             setIsOpen(false);
         } catch (error) {
             console.error('Error creating node:', error);

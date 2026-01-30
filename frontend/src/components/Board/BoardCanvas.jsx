@@ -47,13 +47,19 @@ export default function BoardCanvas({ boardId }) {
         }
     }, [zoomIn, zoomOut]);
 
-    // Pan with Space + drag
+    // Pan with Space + drag or Middle mouse button
     const handleCanvasMouseDown = (e) => {
-        if (e.button === 1 || (e.button === 0 && e.spaceKey)) { // Middle mouse or Space+left
+        // Middle mouse button (1) or left mouse (0) with space key
+        if (e.button === 1 || (e.button === 0 && (e.spaceKey || isPanningRef.spacePressed))) {
             e.preventDefault();
             isPanningRef.current = true;
             panStartRef.current = { x: e.clientX, y: e.clientY };
             document.body.style.cursor = 'grabbing';
+
+            // Prevent default middle mouse scroll
+            if (e.button === 1) {
+                e.stopPropagation();
+            }
         }
     };
 
@@ -66,10 +72,10 @@ export default function BoardCanvas({ boardId }) {
         }
     };
 
-    const handleCanvasMouseUp = () => {
+    const handleCanvasMouseUp = (e) => {
         if (isPanningRef.current) {
             isPanningRef.current = false;
-            document.body.style.cursor = '';
+            document.body.style.cursor = isPanningRef.spacePressed ? 'grab' : '';
         }
     };
 
@@ -77,16 +83,23 @@ export default function BoardCanvas({ boardId }) {
     useEffect(() => {
         const handleKeyDown = (e) => {
             if (e.code === 'Space' && !e.repeat) {
+                // Don't interfere with input fields
+                if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+                    return;
+                }
+
                 e.preventDefault();
+                isPanningRef.spacePressed = true;
                 document.body.style.cursor = 'grab';
-                // Add space flag to mouse events
-                document.addEventListener('mousedown', (e) => { e.spaceKey = true; }, { once: true });
             }
         };
 
         const handleKeyUp = (e) => {
             if (e.code === 'Space') {
-                document.body.style.cursor = '';
+                isPanningRef.spacePressed = false;
+                if (!isPanningRef.current) {
+                    document.body.style.cursor = '';
+                }
             }
         };
 
@@ -96,6 +109,7 @@ export default function BoardCanvas({ boardId }) {
         return () => {
             window.removeEventListener('keydown', handleKeyDown);
             window.removeEventListener('keyup', handleKeyUp);
+            document.body.style.cursor = '';
         };
     }, []);
 
