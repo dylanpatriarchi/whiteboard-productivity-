@@ -36,7 +36,13 @@ export default function FloatingAddButton() {
     ];
 
     const handleAddNode = async (type) => {
-        if (!currentBoard) return;
+        console.log('handleAddNode called with type:', type);
+        console.log('currentBoard:', currentBoard);
+
+        if (!currentBoard) {
+            console.error('No current board available!');
+            return;
+        }
 
         // Random position near center
         const centerX = window.innerWidth / 2 - 150;
@@ -64,7 +70,7 @@ export default function FloatingAddButton() {
 
         const config = nodeConfig[type] || nodeConfig.sticky;
 
-        await createNode({
+        const nodeData = {
             boardId: currentBoard._id,
             type,
             position: {
@@ -75,9 +81,17 @@ export default function FloatingAddButton() {
             size: config.size,
             content: config.content,
             style: {},
-        });
+        };
 
-        setIsOpen(false);
+        console.log('Creating node with data:', nodeData);
+
+        try {
+            const result = await createNode(nodeData);
+            console.log('Node created successfully:', result);
+            setIsOpen(false);
+        } catch (error) {
+            console.error('Error creating node:', error);
+        }
     };
 
     return (

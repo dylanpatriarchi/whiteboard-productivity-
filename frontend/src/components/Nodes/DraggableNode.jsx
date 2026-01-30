@@ -1,13 +1,13 @@
-import { useRef, useState } from 'react';
+import { useRef, useEffect } from 'react';
 import { useNodeStore } from '../../store/useNodeStore';
 
 export default function DraggableNode({ node, children }) {
     const { updateNodeLocal, updateNode, selectNode, selectedNode } = useNodeStore();
     const nodeRef = useRef(null);
-    const [isDragging, setIsDragging] = useState(false);
-    const [isResizing, setIsResizing] = useState(false);
+    const isDraggingRef = useRef(false);
+    const isResizingRef = useRef(false);
     const dragStartPos = useRef({ x: 0, y: 0 });
-    const resizeStartSize = useRef({ width: 0, height: 0 });
+    const resizeStartData = useRef(null);
 
     const isSelected = selectedNode?._id === node._id;
 
@@ -17,7 +17,7 @@ export default function DraggableNode({ node, children }) {
         if (e.button !== 0) return; // Only left click
 
         e.preventDefault();
-        setIsDragging(true);
+        isDraggingRef.current = true;
         selectNode(node);
 
         dragStartPos.current = {
@@ -30,23 +30,63 @@ export default function DraggableNode({ node, children }) {
     };
 
     const handleMouseMove = (e) => {
-        if (!isDragging && !isResizing) return;
-
-        if (isDragging) {
+        if (isDraggingRef.current) {
             const newX = e.clientX - dragStartPos.current.x;
             const newY = e.clientY - dragStartPos.current.y;
 
             updateNodeLocal(node._id, {
                 position: { ...node.position, x: newX, y: newY },
             });
+        } else if (isResizingRef.current && resizeStartData.current) {
+            const { width, height, startX, startY, direction, posX, posY } = resizeStartData.current;
+            const deltaX = e.clientX - startX;
+            const deltaY = e.clientY - startY;
+
+            let newWidth = width;
+            let newHeight = height;
+            let newX = posX;
+            let newY = posY;
+
+            if (direction.includes('e')) {
+                newWidth = Math.max(200, width + deltaX);
+            }
+            if (direction.includes('s')) {
+                newHeight = Math.max(150, height + deltaY);
+            }
+            if (direction.includes('w')) {
+                const widthChange = width - deltaX;
+                if (widthChange >= 200) {
+                    newWidth = widthChange;
+                    newX = posX + deltaX;
+                }
+            }
+            if (direction.includes('n')) {
+                const heightChange = height - deltaY;
+                if (heightChange >= 150) {
+                    newHeight = heightChange;
+                    newY = posY + deltaY;
+                }
+            }
+
+            updateNodeLocal(node._id, {
+                size: { width: newWidth, height: newHeight },
+                position: { ...node.position, x: newX, y: newY },
+            });
         }
     };
 
     const handleMouseUp = () => {
-        if (isDragging) {
-            setIsDragging(false);
+        if (isDraggingRef.current) {
+            isDraggingRef.current = false;
             // Save to backend
             updateNode(node._id, {
+                position: node.position,
+            });
+        } else if (isResizingRef.current) {
+            isResizingRef.current = false;
+            resizeStartData.current = null;
+            updateNode(node._id, {
+                size: node.size,
                 position: node.position,
             });
         }
@@ -59,75 +99,35 @@ export default function DraggableNode({ node, children }) {
     const handleResizeStart = (e, direction) => {
         e.preventDefault();
         e.stopPropagation();
-        setIsResizing(true);
+        isResizingRef.current = true;
 
-        resizeStartSize.current = {
+        resizeStartData.current = {
             width: node.size.width,
             height: node.size.height,
             startX: e.clientX,
             startY: e.clientY,
+            posX: node.position.x,
+            posY: node.position.y,
             direction,
         };
 
-        document.addEventListener('mousemove', handleResizeMove);
-        document.addEventListener('mouseup', handleResizeEnd);
+        document.addEventListener('mousemove', handleMouseMove);
+        document.addEventListener('mouseup', handleMouseUp);
     };
 
-    const handleResizeMove = (e) => {
-        if (!isResizing) return;
-
-        const { width, height, startX, startY, direction } = resizeStartSize.current;
-        const deltaX = e.clientX - startX;
-        const deltaY = e.clientY - startY;
-
-        let newWidth = width;
-        let newHeight = height;
-        let newX = node.position.x;
-        let newY = node.position.y;
-
-        if (direction.includes('e')) {
-            newWidth = Math.max(200, width + deltaX);
-        }
-        if (direction.includes('s')) {
-            newHeight = Math.max(150, height + deltaY);
-        }
-        if (direction.includes('w')) {
-            const widthChange = width - deltaX;
-            if (widthChange >= 200) {
-                newWidth = widthChange;
-                newX = node.position.x + deltaX;
-            }
-        }
-        if (direction.includes('n')) {
-            const heightChange = height - deltaY;
-            if (heightChange >= 150) {
-                newHeight = heightChange;
-                newY = node.position.y + deltaY;
-            }
-        }
-
-        updateNodeLocal(node._id, {
-            size: { width: newWidth, height: newHeight },
-            position: { ...node.position, x: newX, y: newY },
-        });
-    };
-
-    const handleResizeEnd = () => {
-        setIsResizing(false);
-        updateNode(node._id, {
-            size: node.size,
-            position: node.position,
-        });
-
-        document.removeEventListener('mousemove', handleResizeMove);
-        document.removeEventListener('mouseup', handleResizeEnd);
-    };
+    // Cleanup on unmount
+    useEffect(() => {
+        return () => {
+            document.removeEventListener('mousemove', handleMouseMove);
+            document.removeEventListener('mouseup', handleMouseUp);
+        };
+    }, []);
 
     return (
         <div
             ref={nodeRef}
             className={`absolute card cursor-move select-none transition-shadow ${isSelected ? 'ring-2 ring-black dark:ring-white shadow-lg' : ''
-                } ${isDragging || isResizing ? 'dragging' : ''}`}
+                } ${isDraggingRef.current || isResizingRef.current ? 'dragging' : ''}`}
             style={{
                 left: node.position.x,
                 top: node.position.y,

@@ -48,7 +48,13 @@ export const useNodeStore = create((set, get) => ({
     updateNodeLocal: (id, updates) => {
         set((state) => ({
             nodes: state.nodes.map((n) =>
-                n._id === id ? { ...n, ...updates } : n
+                n._id === id ? {
+                    ...n,
+                    ...updates,
+                    position: updates.position ? { ...n.position, ...updates.position } : n.position,
+                    size: updates.size ? { ...n.size, ...updates.size } : n.size,
+                    content: updates.content ? { ...n.content, ...updates.content } : n.content,
+                } : n
             ),
         }));
     },

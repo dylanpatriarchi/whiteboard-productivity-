@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
-import { Copy, Trash2, Lock, Unlock } from 'lucide-react';
+import { useEffect, useState, useRef } from 'react';
+import { Copy, Trash2, Lock, Unlock, ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
 import { useBoardStore } from '../../store/useBoardStore';
 import { useNodeStore } from '../../store/useNodeStore';
+import { useCanvasStore } from '../../store/useCanvasStore';
 import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts';
 import DraggableNode from '../Nodes/DraggableNode';
 import StickyNote from '../Nodes/StickyNote';
@@ -11,7 +12,11 @@ import FloatingAddButton from './FloatingAddButton';
 export default function BoardCanvas({ boardId }) {
     const { currentBoard, fetchBoard } = useBoardStore();
     const { nodes, fetchNodes, deleteNode, createNode, updateNode, selectedNode, selectNode, clearSelection } = useNodeStore();
+    const { scale, offsetX, offsetY, zoomIn, zoomOut, resetZoom, pan } = useCanvasStore();
     const [contextMenu, setContextMenu] = useState(null);
+    const canvasRef = useRef(null);
+    const isPanningRef = useRef(false);
+    const panStartRef = useRef({ x: 0, y: 0 });
 
     useEffect(() => {
         if (boardId) {
@@ -19,6 +24,80 @@ export default function BoardCanvas({ boardId }) {
             fetchNodes(boardId);
         }
     }, [boardId]);
+
+    // Mouse wheel zoom
+    useEffect(() => {
+        const handleWheel = (e) => {
+            if (e.ctrlKey || e.metaKey) {
+                e.preventDefault();
+                const delta = e.deltaY;
+
+                if (delta < 0) {
+                    zoomIn();
+                } else {
+                    zoomOut();
+                }
+            }
+        };
+
+        const canvas = canvasRef.current;
+        if (canvas) {
+            canvas.addEventListener('wheel', handleWheel, { passive: false });
+            return () => canvas.removeEventListener('wheel', handleWheel);
+        }
+    }, [zoomIn, zoomOut]);
+
+    // Pan with Space + drag
+    const handleCanvasMouseDown = (e) => {
+        if (e.button === 1 || (e.button === 0 && e.spaceKey)) { // Middle mouse or Space+left
+            e.preventDefault();
+            isPanningRef.current = true;
+            panStartRef.current = { x: e.clientX, y: e.clientY };
+            document.body.style.cursor = 'grabbing';
+        }
+    };
+
+    const handleCanvasMouseMove = (e) => {
+        if (isPanningRef.current) {
+            const deltaX = e.clientX - panStartRef.current.x;
+            const deltaY = e.clientY - panStartRef.current.y;
+            pan(deltaX, deltaY);
+            panStartRef.current = { x: e.clientX, y: e.clientY };
+        }
+    };
+
+    const handleCanvasMouseUp = () => {
+        if (isPanningRef.current) {
+            isPanningRef.current = false;
+            document.body.style.cursor = '';
+        }
+    };
+
+    // Track spacebar for panning
+    useEffect(() => {
+        const handleKeyDown = (e) => {
+            if (e.code === 'Space' && !e.repeat) {
+                e.preventDefault();
+                document.body.style.cursor = 'grab';
+                // Add space flag to mouse events
+                document.addEventListener('mousedown', (e) => { e.spaceKey = true; }, { once: true });
+            }
+        };
+
+        const handleKeyUp = (e) => {
+            if (e.code === 'Space') {
+                document.body.style.cursor = '';
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        window.addEventListener('keyup', handleKeyUp);
+
+        return () => {
+            window.removeEventListener('keydown', handleKeyDown);
+            window.removeEventListener('keyup', handleKeyUp);
+        };
+    }, []);
 
     // Render node component based on type
     const renderNodeContent = (node) => {
@@ -148,6 +227,27 @@ export default function BoardCanvas({ boardId }) {
                 setContextMenu(null);
             },
         },
+        {
+            key: '=',
+            ctrl: true,
+            shift: false,
+            alt: false,
+            action: () => zoomIn(),
+        },
+        {
+            key: '-',
+            ctrl: true,
+            shift: false,
+            alt: false,
+            action: () => zoomOut(),
+        },
+        {
+            key: '0',
+            ctrl: true,
+            shift: false,
+            alt: false,
+            action: () => resetZoom(),
+        },
     ]);
 
     // Click on canvas to deselect
@@ -158,7 +258,41 @@ export default function BoardCanvas({ boardId }) {
     };
 
     return (
-        <div className="flex-1 relative overflow-hidden">
+        <div
+            className="flex-1 relative overflow-hidden"
+            ref={canvasRef}
+            onMouseDown={handleCanvasMouseDown}
+            onMouseMove={handleCanvasMouseMove}
+            onMouseUp={handleCanvasMouseUp}
+        >
+            {/* Zoom controls */}
+            <div className="absolute top-4 right-4 z-40 flex flex-col gap-2">
+                <button
+                    onClick={zoomIn}
+                    className="btn p-2 w-9 h-9 flex items-center justify-center"
+                    title="Zoom in (Ctrl +)"
+                >
+                    <ZoomIn size={18} />
+                </button>
+                <button
+                    onClick={zoomOut}
+                    className="btn p-2 w-9 h-9 flex items-center justify-center"
+                    title="Zoom out (Ctrl -)"
+                >
+                    <ZoomOut size={18} />
+                </button>
+                <button
+                    onClick={resetZoom}
+                    className="btn p-2 w-9 h-9 flex items-center justify-center"
+                    title="Reset zoom (Ctrl 0)"
+                >
+                    <Maximize2 size={18} />
+                </button>
+                <div className="text-xs text-center mt-1 text-light-text-secondary dark:text-dark-text-secondary">
+                    {Math.round(scale * 100)}%
+                </div>
+            </div>
+
             {/* Grid background */}
             <div
                 className="absolute inset-0 dark:opacity-50"
@@ -167,20 +301,32 @@ export default function BoardCanvas({ boardId }) {
             linear-gradient(to right, rgb(0 0 0 / 0.05) 1px, transparent 1px),
             linear-gradient(to bottom, rgb(0 0 0 / 0.05) 1px, transparent 1px)
           `,
-                    backgroundSize: '20px 20px',
+                    backgroundSize: `${20 * scale}px ${20 * scale}px`,
+                    backgroundPosition: `${offsetX}px ${offsetY}px`,
                 }}
             />
 
             {/* Nodes container */}
             <div
                 className="absolute inset-0 p-8"
+                style={{
+                    transform: `scale(${scale}) translate(${offsetX / scale}px, ${offsetY / scale}px)`,
+                    transformOrigin: '0 0',
+                }}
                 onClick={handleCanvasClick}
             >
                 {nodes.length === 0 && (
-                    <div className="flex items-center justify-center h-full pointer-events-none">
+                    <div
+                        className="flex items-center justify-center pointer-events-none"
+                        style={{
+                            height: `${window.innerHeight / scale}px`,
+                            width: `${window.innerWidth / scale}px`,
+                        }}
+                    >
                         <div className="text-center text-light-text-secondary dark:text-dark-text-secondary">
                             <p className="text-lg mb-2">Empty board</p>
                             <p className="text-sm">Click the + button to add a node</p>
+                            <p className="text-xs mt-2">Ctrl + Scroll to zoom • Space + Drag to pan</p>
                         </div>
                     </div>
                 )}
@@ -213,3 +359,4 @@ export default function BoardCanvas({ boardId }) {
         </div>
     );
 }
+
