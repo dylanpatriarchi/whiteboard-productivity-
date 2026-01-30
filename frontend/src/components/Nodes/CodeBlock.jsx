@@ -29,10 +29,10 @@ export default function CodeBlock({ node }) {
     const { updateNodeLocal, updateNode } = useNodeStore();
     const [copied, setCopied] = useState(false);
 
-    // Initialize content
-    const content = node.content || {
-        code: '// Write your code here...',
-        language: 'javascript'
+    // Initialize content with defaults
+    const content = {
+        code: node.content?.code ?? '// Write your code here...',
+        language: node.content?.language ?? 'javascript'
     };
 
     const languages = [

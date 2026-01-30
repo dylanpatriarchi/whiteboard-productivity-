@@ -5,15 +5,15 @@ import { useNodeStore } from '../../store/useNodeStore';
 export default function PomodoroTimer({ node }) {
     const { updateNodeLocal, updateNode } = useNodeStore();
 
-    // Initialize content
-    const content = node.content || {
-        workDuration: 25, // minutes
-        breakDuration: 5, // minutes
-        soundEnabled: true,
-        currentMode: 'work',
-        timeLeft: 25 * 60, // seconds
-        isRunning: false,
-        sessionsCompleted: 0
+    // Initialize content with defaults
+    const content = {
+        workDuration: node.content?.workDuration ?? 25,
+        breakDuration: node.content?.breakDuration ?? 5,
+        soundEnabled: node.content?.soundEnabled ?? true,
+        currentMode: node.content?.currentMode ?? 'work',
+        timeLeft: node.content?.timeLeft ?? (25 * 60),
+        isRunning: node.content?.isRunning ?? false,
+        sessionsCompleted: node.content?.sessionsCompleted ?? 0
     };
 
     const [showSettings, setShowSettings] = useState(false);
@@ -285,8 +285,8 @@ export default function PomodoroTimer({ node }) {
                 <button
                     onClick={toggleTimer}
                     className={`px-6 py-3 rounded-lg flex items-center gap-2 transition-colors ${content.isRunning
-                            ? 'bg-yellow-500 hover:bg-yellow-600 text-white'
-                            : 'bg-green-500 hover:bg-green-600 text-white'
+                        ? 'bg-yellow-500 hover:bg-yellow-600 text-white'
+                        : 'bg-green-500 hover:bg-green-600 text-white'
                         }`}
                 >
                     {content.isRunning ? (

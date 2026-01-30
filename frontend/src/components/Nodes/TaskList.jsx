@@ -6,13 +6,13 @@ export default function TaskList({ node }) {
     const { updateNodeLocal, updateNode } = useNodeStore();
     const [newTaskText, setNewTaskText] = useState('');
 
-    // Initialize content if not present
-    const content = node.content || {
-        title: 'Task List',
-        tasks: []
+    // Initialize content with defaults
+    const content = {
+        title: node.content?.title ?? 'Task List',
+        tasks: node.content?.tasks ?? []
     };
 
-    const tasks = content.tasks || [];
+    const tasks = content.tasks;
 
     // Debounced auto-save
     useEffect(() => {
@@ -97,8 +97,8 @@ export default function TaskList({ node }) {
                         <button
                             onClick={() => toggleTask(task.id)}
                             className={`flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${task.completed
-                                    ? 'bg-green-500 border-green-500'
-                                    : 'border-gray-300 dark:border-gray-600 hover:border-green-500'
+                                ? 'bg-green-500 border-green-500'
+                                : 'border-gray-300 dark:border-gray-600 hover:border-green-500'
                                 }`}
                         >
                             {task.completed && <Check size={14} className="text-white" />}
@@ -107,8 +107,8 @@ export default function TaskList({ node }) {
                         {/* Task Text */}
                         <span
                             className={`flex-1 ${task.completed
-                                    ? 'line-through text-gray-400 dark:text-gray-500'
-                                    : ''
+                                ? 'line-through text-gray-400 dark:text-gray-500'
+                                : ''
                                 }`}
                         >
                             {task.text}
