@@ -25,18 +25,25 @@ export default function BoardCanvas({ boardId }) {
         }
     }, [boardId]);
 
-    // Mouse wheel zoom
+    // Mouse wheel zoom (towards cursor)
     useEffect(() => {
         const handleWheel = (e) => {
             if (e.ctrlKey || e.metaKey) {
                 e.preventDefault();
                 const delta = e.deltaY;
 
-                if (delta < 0) {
-                    zoomIn();
-                } else {
-                    zoomOut();
-                }
+                // Get mouse position relative to canvas
+                const rect = canvasRef.current.getBoundingClientRect();
+                const mouseX = e.clientX - rect.left;
+                const mouseY = e.clientY - rect.top;
+
+                // Calculate new scale
+                const scaleChange = delta < 0 ? 1.1 : 0.9;
+                const newScale = Math.max(0.1, Math.min(5, scale * scaleChange));
+
+                // Use setZoom with mouse position
+                const { setZoom } = useCanvasStore.getState();
+                setZoom(newScale, mouseX, mouseY);
             }
         };
 
@@ -45,7 +52,7 @@ export default function BoardCanvas({ boardId }) {
             canvas.addEventListener('wheel', handleWheel, { passive: false });
             return () => canvas.removeEventListener('wheel', handleWheel);
         }
-    }, [zoomIn, zoomOut]);
+    }, [scale]);
 
     // Two-finger touchpad pan (scroll without Ctrl)
     useEffect(() => {
