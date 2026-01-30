@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react';
-import { Copy, Check } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Copy, Check, Play, X } from 'lucide-react';
 import { useNodeStore } from '../../store/useNodeStore';
 import Prism from 'prismjs';
 
 // Import Prism themes and languages
-import 'prismjs/themes/prism-tomorrow.css'; // Dark theme
+import 'prismjs/themes/prism-tomorrow.css';
 import 'prismjs/components/prism-javascript';
 import 'prismjs/components/prism-typescript';
 import 'prismjs/components/prism-python';
@@ -23,11 +23,15 @@ import 'prismjs/components/prism-yaml';
 import 'prismjs/components/prism-markdown';
 import 'prismjs/components/prism-css';
 import 'prismjs/components/prism-scss';
-import 'prismjs/components/prism-markup'; // HTML
+import 'prismjs/components/prism-markup';
 
 export default function CodeBlock({ node }) {
     const { updateNodeLocal, updateNode } = useNodeStore();
     const [copied, setCopied] = useState(false);
+    const [output, setOutput] = useState('');
+    const [isRunning, setIsRunning] = useState(false);
+    const [pyodideLoading, setPyodideLoading] = useState(false);
+    const pyodideRef = useRef(null);
 
     // Initialize content with defaults
     const content = {
@@ -36,26 +40,29 @@ export default function CodeBlock({ node }) {
     };
 
     const languages = [
-        { value: 'javascript', label: 'JavaScript' },
-        { value: 'typescript', label: 'TypeScript' },
-        { value: 'python', label: 'Python' },
-        { value: 'java', label: 'Java' },
-        { value: 'c', label: 'C' },
-        { value: 'cpp', label: 'C++' },
-        { value: 'csharp', label: 'C#' },
-        { value: 'php', label: 'PHP' },
-        { value: 'ruby', label: 'Ruby' },
-        { value: 'go', label: 'Go' },
-        { value: 'rust', label: 'Rust' },
-        { value: 'sql', label: 'SQL' },
-        { value: 'bash', label: 'Bash' },
-        { value: 'json', label: 'JSON' },
-        { value: 'yaml', label: 'YAML' },
-        { value: 'markdown', label: 'Markdown' },
-        { value: 'css', label: 'CSS' },
-        { value: 'scss', label: 'SCSS' },
-        { value: 'markup', label: 'HTML' },
+        { value: 'javascript', label: 'JavaScript', executable: true },
+        { value: 'python', label: 'Python', executable: true },
+        { value: 'typescript', label: 'TypeScript', executable: false },
+        { value: 'java', label: 'Java', executable: false },
+        { value: 'c', label: 'C', executable: false },
+        { value: 'cpp', label: 'C++', executable: false },
+        { value: 'csharp', label: 'C#', executable: false },
+        { value: 'php', label: 'PHP', executable: false },
+        { value: 'ruby', label: 'Ruby', executable: false },
+        { value: 'go', label: 'Go', executable: false },
+        { value: 'rust', label: 'Rust', executable: false },
+        { value: 'sql', label: 'SQL', executable: false },
+        { value: 'bash', label: 'Bash', executable: false },
+        { value: 'json', label: 'JSON', executable: false },
+        { value: 'yaml', label: 'YAML', executable: false },
+        { value: 'markdown', label: 'Markdown', executable: false },
+        { value: 'css', label: 'CSS', executable: false },
+        { value: 'scss', label: 'SCSS', executable: false },
+        { value: 'markup', label: 'HTML', executable: false },
     ];
+
+    const currentLanguage = languages.find(l => l.value === content.language);
+    const isExecutable = currentLanguage?.executable || false;
 
     // Auto-save
     useEffect(() => {
@@ -75,10 +82,10 @@ export default function CodeBlock({ node }) {
         updateNodeLocal(node._id, {
             content: { ...content, language: e.target.value }
         });
+        setOutput(''); // Clear output when language changes
     };
 
     const handleKeyDown = (e) => {
-        // Tab key support
         if (e.key === 'Tab') {
             e.preventDefault();
             const start = e.target.selectionStart;
@@ -89,7 +96,6 @@ export default function CodeBlock({ node }) {
                 content: { ...content, code: newValue }
             });
 
-            // Set cursor position after the inserted spaces
             setTimeout(() => {
                 e.target.selectionStart = e.target.selectionEnd = start + 2;
             }, 0);
@@ -106,7 +112,114 @@ export default function CodeBlock({ node }) {
         }
     };
 
-    // Get highlighted code
+    const loadPyodide = async () => {
+        if (pyodideRef.current) return pyodideRef.current;
+
+        setPyodideLoading(true);
+        try {
+            // Load Pyodide from CDN
+            if (!window.loadPyodide) {
+                await new Promise((resolve, reject) => {
+                    const script = document.createElement('script');
+                    script.src = 'https://cdn.jsdelivr.net/pyodide/v0.25.0/full/pyodide.js';
+                    script.onload = resolve;
+                    script.onerror = reject;
+                    document.head.appendChild(script);
+                });
+            }
+
+            const pyodide = await window.loadPyodide({
+                indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.25.0/full/'
+            });
+
+            pyodideRef.current = pyodide;
+            setPyodideLoading(false);
+            return pyodide;
+        } catch (error) {
+            console.error('Pyodide load error:', error);
+            setPyodideLoading(false);
+            throw new Error('Failed to load Python runtime. Check your internet connection.');
+        }
+    };
+
+    const runCode = async () => {
+        setIsRunning(true);
+        setOutput('');
+
+        try {
+            if (content.language === 'javascript') {
+                // Run JavaScript
+                const logs = [];
+                const originalLog = console.log;
+                const originalError = console.error;
+
+                // Override console to capture output
+                console.log = (...args) => {
+                    logs.push(args.map(arg =>
+                        typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
+                    ).join(' '));
+                };
+
+                console.error = (...args) => {
+                    logs.push('ERROR: ' + args.join(' '));
+                };
+
+                try {
+                    // Execute code
+                    const result = eval(content.code);
+
+                    // If there's a return value, add it
+                    if (result !== undefined) {
+                        logs.push('→ ' + (typeof result === 'object' ? JSON.stringify(result, null, 2) : String(result)));
+                    }
+
+                    setOutput(logs.length > 0 ? logs.join('\n') : '(no output)');
+                } catch (error) {
+                    setOutput('Error: ' + error.message);
+                } finally {
+                    console.log = originalLog;
+                    console.error = originalError;
+                }
+            } else if (content.language === 'python') {
+                // Run Python with Pyodide
+                try {
+                    const pyodide = await loadPyodide();
+
+                    // Redirect stdout and stderr
+                    await pyodide.runPythonAsync(`
+import sys
+from io import StringIO
+sys.stdout = StringIO()
+sys.stderr = StringIO()
+                    `);
+
+                    // Run user code
+                    await pyodide.runPythonAsync(content.code);
+
+                    // Get output
+                    const stdout = await pyodide.runPythonAsync('sys.stdout.getvalue()');
+                    const stderr = await pyodide.runPythonAsync('sys.stderr.getvalue()');
+
+                    let result = '';
+                    if (stdout) result += stdout;
+                    if (stderr) result += (result ? '\n' : '') + 'ERROR: ' + stderr;
+
+                    setOutput(result || '(no output)');
+                } catch (error) {
+                    setOutput('Error: ' + error.message);
+                }
+            }
+        } catch (error) {
+            setOutput('Error: ' + error.message);
+        } finally {
+            setIsRunning(false);
+        }
+    };
+
+    const clearOutput = () => {
+        setOutput('');
+    };
+
     const getHighlightedCode = () => {
         try {
             const grammar = Prism.languages[content.language];
@@ -119,7 +232,6 @@ export default function CodeBlock({ node }) {
         return content.code;
     };
 
-    // Generate line numbers
     const lineCount = content.code.split('\n').length;
     const lineNumbers = Array.from({ length: lineCount }, (_, i) => i + 1);
 
@@ -134,27 +246,39 @@ export default function CodeBlock({ node }) {
                 >
                     {languages.map(lang => (
                         <option key={lang.value} value={lang.value}>
-                            {lang.label}
+                            {lang.label} {lang.executable ? '⚡' : ''}
                         </option>
                     ))}
                 </select>
 
-                <button
-                    onClick={copyToClipboard}
-                    className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded flex items-center gap-2 transition-colors text-sm"
-                >
-                    {copied ? (
-                        <>
-                            <Check size={16} className="text-green-400" />
-                            Copied!
-                        </>
-                    ) : (
-                        <>
-                            <Copy size={16} />
-                            Copy
-                        </>
+                <div className="flex gap-2">
+                    {isExecutable && (
+                        <button
+                            onClick={runCode}
+                            disabled={isRunning || pyodideLoading}
+                            className="px-3 py-1.5 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 rounded flex items-center gap-2 transition-colors text-sm"
+                        >
+                            <Play size={16} />
+                            {isRunning ? 'Running...' : pyodideLoading ? 'Loading...' : 'Run'}
+                        </button>
                     )}
-                </button>
+                    <button
+                        onClick={copyToClipboard}
+                        className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded flex items-center gap-2 transition-colors text-sm"
+                    >
+                        {copied ? (
+                            <>
+                                <Check size={16} className="text-green-400" />
+                                Copied!
+                            </>
+                        ) : (
+                            <>
+                                <Copy size={16} />
+                                Copy
+                            </>
+                        )}
+                    </button>
+                </div>
             </div>
 
             {/* Code Editor */}
@@ -171,7 +295,6 @@ export default function CodeBlock({ node }) {
 
                     {/* Code area */}
                     <div className="flex-1 relative">
-                        {/* Syntax highlighted overlay */}
                         <pre
                             className="absolute inset-0 p-4 font-mono text-sm pointer-events-none overflow-hidden"
                             style={{ lineHeight: '24px' }}
@@ -182,7 +305,6 @@ export default function CodeBlock({ node }) {
                             />
                         </pre>
 
-                        {/* Actual textarea */}
                         <textarea
                             value={content.code}
                             onChange={handleCodeChange}
@@ -198,6 +320,25 @@ export default function CodeBlock({ node }) {
                     </div>
                 </div>
             </div>
+
+            {/* Output Panel */}
+            {output && (
+                <div className="border-t border-gray-700 bg-gray-800">
+                    <div className="p-2 flex items-center justify-between bg-gray-900 border-b border-gray-700">
+                        <span className="text-xs font-semibold text-gray-400">OUTPUT</span>
+                        <button
+                            onClick={clearOutput}
+                            className="p-1 hover:bg-gray-700 rounded transition-colors"
+                            title="Clear output"
+                        >
+                            <X size={14} />
+                        </button>
+                    </div>
+                    <pre className="p-4 font-mono text-sm text-green-400 overflow-auto max-h-48 whitespace-pre-wrap">
+                        {output}
+                    </pre>
+                </div>
+            )}
         </div>
     );
 }

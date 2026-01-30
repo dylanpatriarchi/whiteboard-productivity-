@@ -1,20 +1,48 @@
 import { create } from 'zustand';
 
+// Load initial viewport from localStorage
+const loadViewport = () => {
+    try {
+        const saved = localStorage.getItem('canvas-viewport');
+        if (saved) {
+            return JSON.parse(saved);
+        }
+    } catch (error) {
+        console.error('Failed to load viewport:', error);
+    }
+    return { scale: 1, offsetX: 0, offsetY: 0 };
+};
+
+// Save viewport to localStorage
+const saveViewport = (scale, offsetX, offsetY) => {
+    try {
+        localStorage.setItem('canvas-viewport', JSON.stringify({ scale, offsetX, offsetY }));
+    } catch (error) {
+        console.error('Failed to save viewport:', error);
+    }
+};
+
+const initialViewport = loadViewport();
+
 export const useCanvasStore = create((set, get) => ({
-    // Canvas transform
-    scale: 1,
-    offsetX: 0,
-    offsetY: 0,
+    // Canvas transform - load from localStorage
+    scale: initialViewport.scale,
+    offsetX: initialViewport.offsetX,
+    offsetY: initialViewport.offsetY,
 
     // Zoom in
-    zoomIn: () => set((state) => ({
-        scale: Math.min(state.scale * 1.2, 5) // Max 5x zoom
-    })),
+    zoomIn: () => {
+        const newScale = Math.min(get().scale * 1.2, 5);
+        set({ scale: newScale });
+        saveViewport(newScale, get().offsetX, get().offsetY);
+    },
 
     // Zoom out
-    zoomOut: () => set((state) => ({
-        scale: Math.max(state.scale / 1.2, 0.1) // Min 0.1x zoom
-    })),
+    zoomOut: () => {
+        const newScale = Math.max(get().scale / 1.2, 0.1);
+        set({ scale: newScale });
+        saveViewport(newScale, get().offsetX, get().offsetY);
+    },
 
     // Set zoom to specific value with optional mouse position for zoom-to-cursor
     setZoom: (newScale, mouseX, mouseY) => {
@@ -36,20 +64,33 @@ export const useCanvasStore = create((set, get) => ({
                 offsetX: newOffsetX,
                 offsetY: newOffsetY
             });
+            saveViewport(clampedScale, newOffsetX, newOffsetY);
         } else {
             set({ scale: clampedScale });
+            saveViewport(clampedScale, state.offsetX, state.offsetY);
         }
     },
 
     // Reset zoom
-    resetZoom: () => set({ scale: 1, offsetX: 0, offsetY: 0 }),
+    resetZoom: () => {
+        set({ scale: 1, offsetX: 0, offsetY: 0 });
+        saveViewport(1, 0, 0);
+    },
 
     // Pan canvas
-    pan: (deltaX, deltaY) => set((state) => ({
-        offsetX: state.offsetX + deltaX,
-        offsetY: state.offsetY + deltaY,
-    })),
+    pan: (deltaX, deltaY) => {
+        const newOffsetX = get().offsetX + deltaX;
+        const newOffsetY = get().offsetY + deltaY;
+        set({
+            offsetX: newOffsetX,
+            offsetY: newOffsetY,
+        });
+        saveViewport(get().scale, newOffsetX, newOffsetY);
+    },
 
     // Set pan offset
-    setOffset: (offsetX, offsetY) => set({ offsetX, offsetY }),
+    setOffset: (offsetX, offsetY) => {
+        set({ offsetX, offsetY });
+        saveViewport(get().scale, offsetX, offsetY);
+    },
 }));

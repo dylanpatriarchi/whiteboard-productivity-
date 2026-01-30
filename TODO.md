@@ -18,8 +18,11 @@
 - [x] Infinite pan (two-finger touchpad)
   - [x] Natural scrolling
   - [x] Smooth pan
-- [x] Node drag & drop
-- [x] Node resize (8 handles)
+- [x] Node interaction model
+  - [x] **Single click** - Interact with content (write, click buttons, etc.)
+  - [x] **Double click** - Enable drag & resize mode with blue border
+  - [x] Click outside to exit edit mode
+- [x] Node resize (8 handles - blue in edit mode)
 - [x] Context menu (right-click)
 - [x] Keyboard shortcuts
   - [x] Delete (Del/Backspace)
@@ -29,81 +32,81 @@
   - [x] Reset Zoom (Ctrl/Cmd + 0)
 
 ### Implemented Nodes
-- [x] **Sticky Note**
-  - [x] Text input (auto-resize textarea)
-  - [x] 5 color options (yellow, blue, green, pink, purple)
-  - [x] Character counter
-  - [x] Auto-save (500ms debounce)
-  - [x] Full drag & drop support
-  - [x] Resize handles
-  - [x] Context menu integration
 
----
+#### ✅ Sticky Note
+- [x] Text input (auto-resize textarea)
+- [x] 5 color options (yellow, blue, green, pink, purple)
+- [x] Character counter
+- [x] Auto-save (500ms debounce)
+- [x] Full drag & drop support
+- [x] Resize handles
+- [x] Context menu integration
 
-## 🚀 In Progress - Priority 1 Nodes
+#### ✅ Task List
+- [x] Create `TaskList.jsx` component
+- [x] UI design
+  - [x] Header with title
+  - [x] Add task input + button
+  - [x] Task items with checkboxes
+  - [x] Delete task button per item
+- [x] Functionality
+  - [x] Add new task (Enter or + button)
+  - [x] Check/uncheck tasks
+  - [x] Delete tasks (X button)
+  - [x] Task completion percentage display
+  - [x] Save state to MongoDB
+- [x] Styling
+  - [x] Dark/light mode support
+  - [x] Hover effects
+  - [x] Completed task styling (strikethrough)
 
-### Task List
-- [ ] Create `TaskList.jsx` component
-- [ ] UI design
-  - [ ] Header with title
-  - [ ] Add task input + button
-  - [ ] Task items with checkboxes
-  - [ ] Delete task button per item
-- [ ] Functionality
-  - [ ] Add new task
-  - [ ] Check/uncheck tasks
-  - [ ] Delete tasks
-  - [ ] Task completion percentage
-  - [ ] Save state to MongoDB
-- [ ] Styling
-  - [ ] Dark/light mode support
-  - [ ] Hover effects
-  - [ ] Completed task styling (strikethrough)
+#### ✅ Pomodoro Timer
+- [x] Create `PomodoroTimer.jsx` component
+- [x] Settings (per-node with modal panel)
+  - [x] Work duration (text input with validation, 1-120 min)
+  - [x] Break duration (text input with validation, 1-120 min)
+  - [x] Sound notification toggle (on/off)
+  - [x] Apply/Cancel buttons
+- [x] UI design
+  - [x] Timer display (MM:SS format)
+  - [x] Start/Pause button
+  - [x] Reset button
+  - [x] Settings button/panel
+  - [x] Visual progress ring/circle (SVG)
+  - [x] Session counter
+  - [x] Mode indicator (🍅 Focus Time / ☕ Break Time)
+- [x] Functionality
+  - [x] Countdown timer with setInterval
+  - [x] Auto-switch work ↔ break
+  - [x] Sound notification (Web Audio API 800Hz beep)
+  - [x] Persist ALL state to MongoDB (pause/resume works after refresh)
+  - [x] Immediate save on critical actions (start/pause/reset/settings)
+- [x] Styling
+  - [x] Circular SVG progress indicator
+  - [x] Color coding (work = red, break = green)
+  - [x] Dark/light mode support
+  - [x] Background tint based on mode
 
-### Pomodoro Timer
-- [ ] Create `PomodoroTimer.jsx` component
-- [ ] Settings (per-node)
-  - [ ] Work duration (default 25 min, user configurable)
-  - [ ] Break duration (default 5 min, user configurable)
-  - [ ] Sound notification toggle (on/off)
-- [ ] UI design
-  - [ ] Timer display (MM:SS)
-  - [ ] Start/Pause button
-  - [ ] Reset button
-  - [ ] Settings button/panel
-  - [ ] Visual progress ring/circle
-  - [ ] Session counter
-  - [ ] Mode indicator (Work/Break)
-- [ ] Functionality
-  - [ ] Countdown timer
-  - [ ] Auto-switch work ↔ break
-  - [ ] Sound notification (Web Audio API beep)
-  - [ ] Browser notification (optional)
-  - [ ] Persist timer state (pause/resume after refresh)
-- [ ] Styling
-  - [ ] Circular progress indicator
-  - [ ] Color coding (work = red, break = green)
-  - [ ] Dark/light mode support
-
-### Code Block
-- [ ] Create `CodeBlock.jsx` component
-- [ ] UI design
-  - [ ] Language selector dropdown
-  - [ ] Code editor textarea
-  - [ ] Line numbers sidebar
-  - [ ] Copy button
-  - [ ] Dark/light theme toggle for code
-- [ ] Functionality
-  - [ ] Syntax highlighting (using Prism.js or Highlight.js)
-  - [ ] Support for multiple languages (JS, Python, Java, HTML, CSS, etc.)
-  - [ ] Tab key support (insert spaces)
-  - [ ] Copy to clipboard
-  - [ ] Auto-save code content
-- [ ] Styling
-  - [ ] Monospace font
-  - [ ] Line number gutter
-  - [ ] Syntax colors
-  - [ ] Dark/light code themes
+#### ✅ Code Block
+- [x] Create `CodeBlock.jsx` component
+- [x] Install Prism.js (`npm install prismjs`)
+- [x] UI design
+  - [x] Language selector dropdown
+  - [x] Code editor textarea
+  - [x] Line numbers sidebar
+  - [x] Copy button (with "Copied!" feedback)
+- [x] Functionality
+  - [x] Syntax highlighting (using Prism.js)
+  - [x] Support for 19 languages (JS, TS, Python, Java, C, C++, C#, PHP, Ruby, Go, Rust, SQL, Bash, JSON, YAML, Markdown, CSS, SCSS, HTML)
+  - [x] Tab key support (inserts 2 spaces)
+  - [x] Copy to clipboard
+  - [x] Auto-save code content (500ms debounce)
+- [x] Styling
+  - [x] Monospace font
+  - [x] Line number gutter
+  - [x] Syntax colors (Prism Tomorrow theme)
+  - [x] Dark code editor theme
+  - [x] Transparent textarea overlay technique
 
 ---
 
@@ -183,7 +186,30 @@
 
 ## 📝 Notes
 
+### Node Architecture
 - All nodes inherit from `DraggableNode.jsx` for consistent drag/drop and resize
-- All nodes auto-save to MongoDB with debouncing
-- Dark/light mode should be supported by all nodes
+- All nodes auto-save to MongoDB with debouncing (500ms - 2s depending on node)
+- All nodes use nullish coalescing (`??`) for content initialization to prevent undefined bugs
+- Dark/light mode supported by all nodes
 - Context menu (duplicate, lock, delete) works with all nodes
+
+### Interaction Model
+- **Single click**: Interact with node content (type, click buttons, check boxes)
+- **Double click**: Enable edit mode for drag & resize (blue border appears)
+- Edit mode shows blue border and 8 blue resize handles
+- Click outside node to exit edit mode
+
+### Dependencies
+- **Frontend**: React, Zustand, Vite, Lucide React, Prism.js
+- **Backend**: Express, MongoDB, Mongoose, CORS, Helmet
+- **Rate Limit**: 10,000 requests per 15 minutes (development)
+
+---
+
+## 🎯 Next Steps
+
+1. Test all Priority 1 nodes thoroughly
+2. Fix any bugs discovered during testing
+3. Begin implementing Priority 2 nodes (Text Block, Image, Drawing Canvas)
+4. Add board management features (create/delete/rename boards)
+5. Improve UI/UX based on user feedback

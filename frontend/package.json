@@ -13,6 +13,7 @@
         "axios": "^1.6.0",
         "lucide-react": "^0.300.0",
         "prismjs": "^1.30.0",
+        "pyodide": "^0.29.3",
         "react": "^18.2.0",
         "react-dom": "^18.2.0",
         "zustand": "^4.4.7"
