@@ -6,6 +6,9 @@ import { useCanvasStore } from '../../store/useCanvasStore';
 import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts';
 import DraggableNode from '../Nodes/DraggableNode';
 import StickyNote from '../Nodes/StickyNote';
+import TaskList from '../Nodes/TaskList';
+import PomodoroTimer from '../Nodes/PomodoroTimer';
+import CodeBlock from '../Nodes/CodeBlock';
 import ContextMenu from '../Common/ContextMenu';
 import FloatingAddButton from './FloatingAddButton';
 
@@ -83,11 +86,11 @@ export default function BoardCanvas({ boardId }) {
             case 'sticky':
                 return <StickyNote node={node} />;
             case 'tasklist':
-                return <div className="p-4 text-sm">Task List (Coming soon)</div>;
+                return <TaskList node={node} />;
             case 'pomodoro':
-                return <div className="p-4 text-sm">Pomodoro Timer (Coming soon)</div>;
+                return <PomodoroTimer node={node} />;
             case 'code':
-                return <div className="p-4 text-sm">Code Block (Coming soon)</div>;
+                return <CodeBlock node={node} />;
             default:
                 return <div className="p-4 text-sm">Unknown node type: {node.type}</div>;
         }
