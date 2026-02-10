@@ -11,6 +11,7 @@ import { errorHandler, notFound } from './middleware/errorHandler.js';
 import boardRoutes from './routes/boards.js';
 import nodeRoutes from './routes/nodes.js';
 import settingsRoutes from './routes/settings.js';
+import aiRoutes from './routes/ai.js';
 
 // Load environment variables
 dotenv.config();
@@ -52,6 +53,7 @@ app.get('/api/health', (req, res) => {
 app.use('/api/boards', boardRoutes);
 app.use('/api/nodes', nodeRoutes);
 app.use('/api/settings', settingsRoutes);
+app.use('/api/ai', aiRoutes);
 
 // Error handling
 app.use(notFound);

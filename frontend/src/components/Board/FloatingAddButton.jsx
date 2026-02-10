@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, StickyNote, CheckSquare, Timer, Code } from 'lucide-react';
+import { Plus, StickyNote, CheckSquare, Timer, Code, Calendar, Bot, Columns, ImageIcon, Pencil, Type } from 'lucide-react';
 import { useNodeStore } from '../../store/useNodeStore';
 import { useBoardStore } from '../../store/useBoardStore';
 
@@ -9,30 +9,16 @@ export default function FloatingAddButton() {
     const { currentBoard } = useBoardStore();
 
     const nodeTypes = [
-        {
-            type: 'sticky',
-            label: 'Sticky Note',
-            icon: <StickyNote size={20} />,
-            color: '#fef3c7',
-        },
-        {
-            type: 'tasklist',
-            label: 'Task List',
-            icon: <CheckSquare size={20} />,
-            color: '#dbeafe',
-        },
-        {
-            type: 'pomodoro',
-            label: 'Pomodoro Timer',
-            icon: <Timer size={20} />,
-            color: '#fce7f3',
-        },
-        {
-            type: 'code',
-            label: 'Code Block',
-            icon: <Code size={20} />,
-            color: '#d1fae5',
-        },
+        { type: 'sticky', label: 'Sticky Note', icon: <StickyNote size={20} />, color: '#fef3c7' },
+        { type: 'tasklist', label: 'Task List', icon: <CheckSquare size={20} />, color: '#dbeafe' },
+        { type: 'pomodoro', label: 'Pomodoro Timer', icon: <Timer size={20} />, color: '#fce7f3' },
+        { type: 'code', label: 'Code Block', icon: <Code size={20} />, color: '#d1fae5' },
+        { type: 'calendar', label: 'Calendar', icon: <Calendar size={20} />, color: '#e0e7ff' },
+        { type: 'aichat', label: 'AI Chat', icon: <Bot size={20} />, color: '#fae8ff' },
+        { type: 'kanban', label: 'Kanban Board', icon: <Columns size={20} />, color: '#ffedd5' },
+        { type: 'image', label: 'Image', icon: <ImageIcon size={20} />, color: '#cffafe' },
+        { type: 'drawing', label: 'Drawing', icon: <Pencil size={20} />, color: '#fef9c3' },
+        { type: 'texteditor', label: 'Text Editor', icon: <Type size={20} />, color: '#f1f5f9' },
     ];
 
     const handleAddNode = async (type) => {
@@ -41,7 +27,6 @@ export default function FloatingAddButton() {
             return;
         }
 
-        // Random position near center
         const centerX = window.innerWidth / 2 - 150;
         const centerY = window.innerHeight / 2 - 100;
         const randomOffset = () => Math.floor(Math.random() * 100) - 50;
@@ -60,8 +45,38 @@ export default function FloatingAddButton() {
                 size: { width: 300, height: 250 },
             },
             code: {
-                content: { language: 'javascript', code: '', output: '' },
+                content: { language: 'javascript', code: '' },
                 size: { width: 500, height: 400 },
+            },
+            calendar: {
+                content: { events: [] },
+                size: { width: 320, height: 380 },
+            },
+            aichat: {
+                content: { messages: [], systemPrompt: 'You are a helpful assistant. Be concise.' },
+                size: { width: 380, height: 500 },
+            },
+            kanban: {
+                content: {
+                    columns: [
+                        { id: 'todo', title: 'To Do', color: '#ef4444', cards: [] },
+                        { id: 'progress', title: 'In Progress', color: '#f59e0b', cards: [] },
+                        { id: 'done', title: 'Done', color: '#10b981', cards: [] },
+                    ]
+                },
+                size: { width: 550, height: 400 },
+            },
+            image: {
+                content: { imageUrl: '', caption: '' },
+                size: { width: 400, height: 350 },
+            },
+            drawing: {
+                content: { strokes: [], backgroundColor: '#ffffff' },
+                size: { width: 500, height: 400 },
+            },
+            texteditor: {
+                content: { html: '<p>Start typing...</p>' },
+                size: { width: 450, height: 350 },
             },
         };
 
@@ -73,7 +88,7 @@ export default function FloatingAddButton() {
             position: {
                 x: centerX + randomOffset(),
                 y: centerY + randomOffset(),
-                zIndex: Date.now(), // Use timestamp for unique z-index
+                zIndex: Date.now(),
             },
             size: config.size,
             content: config.content,
@@ -92,7 +107,7 @@ export default function FloatingAddButton() {
         <div className="fixed bottom-8 right-8 z-50">
             {/* Menu items */}
             {isOpen && (
-                <div className="mb-3 flex flex-col gap-2">
+                <div className="mb-3 flex flex-col gap-2 max-h-[70vh] overflow-y-auto pr-1">
                     {nodeTypes.map((nodeType) => (
                         <button
                             key={nodeType.type}

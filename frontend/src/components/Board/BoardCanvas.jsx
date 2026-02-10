@@ -9,6 +9,12 @@ import StickyNote from '../Nodes/StickyNote';
 import TaskList from '../Nodes/TaskList';
 import PomodoroTimer from '../Nodes/PomodoroTimer';
 import CodeBlock from '../Nodes/CodeBlock';
+import CalendarWidget from '../Nodes/CalendarWidget';
+import AIChatNode from '../Nodes/AIChatNode';
+import KanbanColumn from '../Nodes/KanbanColumn';
+import ImageNode from '../Nodes/ImageNode';
+import DrawingCanvas from '../Nodes/DrawingCanvas';
+import TextEditor from '../Nodes/TextEditor';
 import ContextMenu from '../Common/ContextMenu';
 import FloatingAddButton from './FloatingAddButton';
 
@@ -91,6 +97,18 @@ export default function BoardCanvas({ boardId }) {
                 return <PomodoroTimer node={node} />;
             case 'code':
                 return <CodeBlock node={node} />;
+            case 'calendar':
+                return <CalendarWidget node={node} />;
+            case 'aichat':
+                return <AIChatNode node={node} />;
+            case 'kanban':
+                return <KanbanColumn node={node} />;
+            case 'image':
+                return <ImageNode node={node} />;
+            case 'drawing':
+                return <DrawingCanvas node={node} />;
+            case 'texteditor':
+                return <TextEditor node={node} />;
             default:
                 return <div className="p-4 text-sm">Unknown node type: {node.type}</div>;
         }
