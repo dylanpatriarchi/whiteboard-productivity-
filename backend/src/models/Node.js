@@ -10,10 +10,10 @@ const nodeSchema = new mongoose.Schema({
         type: String,
         required: true,
         enum: [
-            'sticky', 'tasklist', 'code', 'pomodoro', 'ai-chat',
-            'reminder', 'kanban', 'markdown', 'canvas', 'bookmark',
+            'sticky', 'tasklist', 'code', 'pomodoro', 'ai-chat', 'aichat',
+            'reminder', 'kanban', 'markdown', 'texteditor', 'canvas', 'drawing', 'bookmark',
             'chart', 'calendar', 'mindmap', 'habit-tracker', 'spreadsheet',
-            'file', 'embed', 'voice-note', 'gallery', 'calculator'
+            'file', 'image', 'embed', 'voice-note', 'gallery', 'calculator'
         ]
     },
     position: {
