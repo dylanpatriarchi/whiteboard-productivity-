@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Send, Trash2, Settings, Loader } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
 import { useNodeStore } from '../../store/useNodeStore';
 import api from '../../services/api';
 
@@ -10,6 +11,7 @@ export default function AIChatNode({ node }) {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
     const [showSettings, setShowSettings] = useState(false);
+    const [currentModel, setCurrentModel] = useState(null);
 
     const content = {
         messages: node.content?.messages ?? [],
@@ -51,6 +53,10 @@ export default function AIChatNode({ node }) {
 
             const response = await api.post('/ai/chat', { messages: apiMessages });
             const assistantMessage = { role: 'assistant', content: response.data.message };
+
+            // Update model display from backend response
+            if (response.data.model) setCurrentModel(response.data.model);
+
             save({ messages: [...newMessages, assistantMessage] });
         } catch (err) {
             const errMsg = err.response?.data?.error || err.message || 'Failed to send message';
@@ -76,7 +82,10 @@ export default function AIChatNode({ node }) {
         <div className="h-full flex flex-col bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100">
             {/* Header */}
             <div className="p-2 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between bg-gray-50 dark:bg-gray-900">
-                <span className="text-sm font-semibold flex items-center gap-1">🤖 AI Chat</span>
+                <div className="flex flex-col">
+                    <span className="text-sm font-semibold flex items-center gap-1">🤖 AI Chat</span>
+                    {currentModel && <span className="text-[10px] text-gray-400 font-mono">{currentModel}</span>}
+                </div>
                 <div className="flex gap-1">
                     <button
                         onClick={() => setShowSettings(!showSettings)}
@@ -128,10 +137,14 @@ export default function AIChatNode({ node }) {
                             className={`max-w-[85%] px-3 py-2 rounded-lg text-xs leading-relaxed whitespace-pre-wrap
                                 ${msg.role === 'user'
                                     ? 'bg-blue-500 text-white rounded-br-sm'
-                                    : 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-bl-sm'
+                                    : 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-bl-sm prose prose-sm dark:prose-invert max-w-none'
                                 }`}
                         >
-                            {msg.content}
+                            {msg.role === 'user' ? (
+                                msg.content
+                            ) : (
+                                <ReactMarkdown>{msg.content}</ReactMarkdown>
+                            )}
                         </div>
                     </div>
                 ))}

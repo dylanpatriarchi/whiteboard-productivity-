@@ -18,6 +18,29 @@ export const chat = async (req, res) => {
         }
 
         const useModel = model || settings?.apiKeys?.openai?.model || 'gpt-3.5-turbo';
+        const isNewModel = useModel.startsWith('gpt-5') || useModel.startsWith('o1');
+
+        // Inject model identity into system prompt
+        const systemMessageIndex = messages.findIndex(m => m.role === 'system');
+        if (systemMessageIndex > -1) {
+            messages[systemMessageIndex].content += `\nCurrent Model: ${useModel}. You are running on this specific model version.`;
+        } else {
+            messages.unshift({ role: 'system', content: `You are a helpful assistant running on ${useModel}.` });
+        }
+
+        const requestBody = {
+            model: useModel,
+            messages,
+        };
+
+        if (isNewModel) {
+            requestBody.max_completion_tokens = 2048;
+            // temperature defaults to 1 for new models, sending other values might error
+            requestBody.temperature = 1;
+        } else {
+            requestBody.max_tokens = 2048;
+            requestBody.temperature = 0.7;
+        }
 
         // Call OpenAI API
         const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -26,12 +49,7 @@ export const chat = async (req, res) => {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${apiKey}`,
             },
-            body: JSON.stringify({
-                model: useModel,
-                messages,
-                max_tokens: 2048,
-                temperature: 0.7,
-            }),
+            body: JSON.stringify(requestBody),
         });
 
         if (!response.ok) {

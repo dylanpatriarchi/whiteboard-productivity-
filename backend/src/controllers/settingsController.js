@@ -30,15 +30,47 @@ export const getSettings = async (req, res) => {
 // Update settings
 export const updateSettings = async (req, res) => {
     try {
-        // TODO: Implement encryption for API keys before saving
-        const settings = await Settings.findByIdAndUpdate(
-            'global-settings',
-            req.body,
-            { new: true, upsert: true, runValidators: true }
-        );
+        let settings = await Settings.findById('global-settings');
 
-        res.json(settings);
+        if (!settings) {
+            settings = new Settings({ _id: 'global-settings', ...req.body });
+        } else {
+            // Smart update to preserve keys if not provided
+            if (req.body.apiKeys) {
+                if (req.body.apiKeys.openai) {
+                    settings.apiKeys.openai.model = req.body.apiKeys.openai.model || settings.apiKeys.openai.model;
+                    if (req.body.apiKeys.openai.key) {
+                        settings.apiKeys.openai.key = req.body.apiKeys.openai.key;
+                        settings.apiKeys.openai.enabled = true;
+                    }
+                    if (req.body.apiKeys.openai.hasOwnProperty('enabled')) {
+                        settings.apiKeys.openai.enabled = req.body.apiKeys.openai.enabled;
+                    }
+                }
+                // Handle other providers similarly if needed
+            }
+
+            // Handle preferences
+            if (req.body.preferences) {
+                settings.preferences = { ...settings.preferences.toObject(), ...req.body.preferences };
+            }
+        }
+
+        await settings.save();
+
+        // Return masked response
+        const response = settings.toObject();
+        if (response.apiKeys) {
+            response.apiKeys = {
+                openai: { enabled: response.apiKeys.openai?.enabled || false, model: response.apiKeys.openai?.model },
+                anthropic: { enabled: response.apiKeys.anthropic?.enabled || false, model: response.apiKeys.anthropic?.model },
+                custom: { enabled: response.apiKeys.custom?.enabled || false }
+            };
+        }
+
+        res.json(response);
     } catch (error) {
+        console.error('Update settings error:', error);
         res.status(400).json({ error: error.message });
     }
 };
