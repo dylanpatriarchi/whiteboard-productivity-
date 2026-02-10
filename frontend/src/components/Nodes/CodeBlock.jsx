@@ -1,37 +1,89 @@
-import { useState, useEffect, useRef } from 'react';
-import { Copy, Check, Play, X } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { Copy, Check, Play, X, Loader } from 'lucide-react';
 import { useNodeStore } from '../../store/useNodeStore';
 import Prism from 'prismjs';
 
 // Import Prism themes and languages
 import 'prismjs/themes/prism-tomorrow.css';
 import 'prismjs/components/prism-javascript';
-import 'prismjs/components/prism-typescript';
 import 'prismjs/components/prism-python';
-import 'prismjs/components/prism-java';
-import 'prismjs/components/prism-c';
-import 'prismjs/components/prism-cpp';
-import 'prismjs/components/prism-csharp';
-import 'prismjs/components/prism-php';
-import 'prismjs/components/prism-ruby';
-import 'prismjs/components/prism-go';
-import 'prismjs/components/prism-rust';
-import 'prismjs/components/prism-sql';
-import 'prismjs/components/prism-bash';
-import 'prismjs/components/prism-json';
-import 'prismjs/components/prism-yaml';
-import 'prismjs/components/prism-markdown';
-import 'prismjs/components/prism-css';
-import 'prismjs/components/prism-scss';
-import 'prismjs/components/prism-markup';
+
+// Shared Pyodide instance across all CodeBlock components
+let sharedPyodide = null;
+let pyodideLoadingPromise = null;
+
+async function getOrLoadPyodide(setStatus) {
+    // Already loaded
+    if (sharedPyodide) return sharedPyodide;
+
+    // Loading in progress by another component
+    if (pyodideLoadingPromise) {
+        setStatus('Loading Python (shared)...');
+        return pyodideLoadingPromise;
+    }
+
+    // Start fresh load
+    pyodideLoadingPromise = (async () => {
+        try {
+            setStatus('Loading Pyodide script...');
+
+            // Load CDN script if not already loaded
+            if (!window.loadPyodide) {
+                await new Promise((resolve, reject) => {
+                    // Check if script already exists
+                    if (document.querySelector('script[src*="pyodide"]')) {
+                        // Wait for it to load
+                        const check = setInterval(() => {
+                            if (window.loadPyodide) {
+                                clearInterval(check);
+                                resolve();
+                            }
+                        }, 100);
+                        setTimeout(() => { clearInterval(check); reject(new Error('Timeout')); }, 30000);
+                        return;
+                    }
+
+                    const script = document.createElement('script');
+                    script.src = 'https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js';
+                    script.crossOrigin = 'anonymous';
+                    script.onload = () => {
+                        // Wait for loadPyodide to be globally available
+                        const check = setInterval(() => {
+                            if (window.loadPyodide) {
+                                clearInterval(check);
+                                resolve();
+                            }
+                        }, 50);
+                        setTimeout(() => { clearInterval(check); reject(new Error('Timeout')); }, 15000);
+                    };
+                    script.onerror = () => reject(new Error('Failed to load Pyodide script from CDN'));
+                    document.head.appendChild(script);
+                });
+            }
+
+            setStatus('Initializing Python runtime...');
+
+            const pyodide = await window.loadPyodide({
+                indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.26.4/full/',
+            });
+
+            sharedPyodide = pyodide;
+            return pyodide;
+        } catch (error) {
+            pyodideLoadingPromise = null; // Allow retry
+            throw error;
+        }
+    })();
+
+    return pyodideLoadingPromise;
+}
 
 export default function CodeBlock({ node }) {
     const { updateNodeLocal, updateNode } = useNodeStore();
     const [copied, setCopied] = useState(false);
     const [output, setOutput] = useState('');
     const [isRunning, setIsRunning] = useState(false);
-    const [pyodideLoading, setPyodideLoading] = useState(false);
-    const pyodideRef = useRef(null);
+    const [loadStatus, setLoadStatus] = useState('');
 
     // Initialize content with defaults
     const content = {
@@ -40,29 +92,9 @@ export default function CodeBlock({ node }) {
     };
 
     const languages = [
-        { value: 'javascript', label: 'JavaScript', executable: true },
-        { value: 'python', label: 'Python', executable: true },
-        { value: 'typescript', label: 'TypeScript', executable: false },
-        { value: 'java', label: 'Java', executable: false },
-        { value: 'c', label: 'C', executable: false },
-        { value: 'cpp', label: 'C++', executable: false },
-        { value: 'csharp', label: 'C#', executable: false },
-        { value: 'php', label: 'PHP', executable: false },
-        { value: 'ruby', label: 'Ruby', executable: false },
-        { value: 'go', label: 'Go', executable: false },
-        { value: 'rust', label: 'Rust', executable: false },
-        { value: 'sql', label: 'SQL', executable: false },
-        { value: 'bash', label: 'Bash', executable: false },
-        { value: 'json', label: 'JSON', executable: false },
-        { value: 'yaml', label: 'YAML', executable: false },
-        { value: 'markdown', label: 'Markdown', executable: false },
-        { value: 'css', label: 'CSS', executable: false },
-        { value: 'scss', label: 'SCSS', executable: false },
-        { value: 'markup', label: 'HTML', executable: false },
+        { value: 'javascript', label: 'JavaScript' },
+        { value: 'python', label: 'Python' },
     ];
-
-    const currentLanguage = languages.find(l => l.value === content.language);
-    const isExecutable = currentLanguage?.executable || false;
 
     // Auto-save
     useEffect(() => {
@@ -79,10 +111,15 @@ export default function CodeBlock({ node }) {
     };
 
     const handleLanguageChange = (e) => {
+        const newLang = e.target.value;
+        const defaultCode = newLang === 'python'
+            ? '# Write your Python code here...\nprint("Hello World!")'
+            : '// Write your JavaScript code here...\nconsole.log("Hello World!");';
+
         updateNodeLocal(node._id, {
-            content: { ...content, language: e.target.value }
+            content: { ...content, language: newLang, code: content.code === '// Write your code here...' || content.code === '# Write your Python code here...\nprint("Hello World!")' || content.code === '// Write your JavaScript code here...\nconsole.log("Hello World!");' ? defaultCode : content.code }
         });
-        setOutput(''); // Clear output when language changes
+        setOutput('');
     };
 
     const handleKeyDown = (e) => {
@@ -90,14 +127,15 @@ export default function CodeBlock({ node }) {
             e.preventDefault();
             const start = e.target.selectionStart;
             const end = e.target.selectionEnd;
-            const newValue = content.code.substring(0, start) + '  ' + content.code.substring(end);
+            const spaces = content.language === 'python' ? '    ' : '  ';
+            const newValue = content.code.substring(0, start) + spaces + content.code.substring(end);
 
             updateNodeLocal(node._id, {
                 content: { ...content, code: newValue }
             });
 
             setTimeout(() => {
-                e.target.selectionStart = e.target.selectionEnd = start + 2;
+                e.target.selectionStart = e.target.selectionEnd = start + spaces.length;
             }, 0);
         }
     };
@@ -112,33 +150,87 @@ export default function CodeBlock({ node }) {
         }
     };
 
-    const loadPyodide = async () => {
-        if (pyodideRef.current) return pyodideRef.current;
+    const runJavaScript = () => {
+        const logs = [];
+        const originalLog = console.log;
+        const originalWarn = console.warn;
+        const originalError = console.error;
+        const originalInfo = console.info;
 
-        setPyodideLoading(true);
+        console.log = (...args) => {
+            logs.push(args.map(arg =>
+                typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
+            ).join(' '));
+        };
+        console.warn = (...args) => logs.push('⚠ ' + args.map(String).join(' '));
+        console.error = (...args) => logs.push('❌ ' + args.map(String).join(' '));
+        console.info = (...args) => logs.push('ℹ ' + args.map(String).join(' '));
+
         try {
-            // Load Pyodide from CDN
-            if (!window.loadPyodide) {
-                await new Promise((resolve, reject) => {
-                    const script = document.createElement('script');
-                    script.src = 'https://cdn.jsdelivr.net/pyodide/v0.25.0/full/pyodide.js';
-                    script.onload = resolve;
-                    script.onerror = reject;
-                    document.head.appendChild(script);
-                });
+            // Wrap in function to allow return
+            const wrappedCode = `(function() { ${content.code} })()`;
+            const result = eval(wrappedCode);
+
+            if (result !== undefined) {
+                logs.push('→ ' + (typeof result === 'object' ? JSON.stringify(result, null, 2) : String(result)));
             }
 
-            const pyodide = await window.loadPyodide({
-                indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.25.0/full/'
-            });
-
-            pyodideRef.current = pyodide;
-            setPyodideLoading(false);
-            return pyodide;
+            return logs.length > 0 ? logs.join('\n') : '(no output)';
         } catch (error) {
-            console.error('Pyodide load error:', error);
-            setPyodideLoading(false);
-            throw new Error('Failed to load Python runtime. Check your internet connection.');
+            return (logs.length > 0 ? logs.join('\n') + '\n' : '') + '❌ ' + error.name + ': ' + error.message;
+        } finally {
+            console.log = originalLog;
+            console.warn = originalWarn;
+            console.error = originalError;
+            console.info = originalInfo;
+        }
+    };
+
+    const runPython = async () => {
+        try {
+            const pyodide = await getOrLoadPyodide(setLoadStatus);
+            setLoadStatus('');
+
+            // Reset stdout/stderr before each run
+            pyodide.runPython(`
+import sys
+from io import StringIO
+_stdout_capture = StringIO()
+_stderr_capture = StringIO()
+sys.stdout = _stdout_capture
+sys.stderr = _stderr_capture
+`);
+
+            // Run user code
+            try {
+                pyodide.runPython(content.code);
+            } catch (pyErr) {
+                // Get any partial output before error
+                const partialOut = pyodide.runPython('_stdout_capture.getvalue()');
+                const errMsg = pyErr.message || String(pyErr);
+
+                // Clean up Python traceback to show just the relevant error
+                const cleanError = errMsg.replace(/PythonError: Traceback \(most recent call last\):\n/, '')
+                    .replace(/  File "<exec>", line \d+, in <module>\n/, '');
+
+                return (partialOut ? partialOut + '\n' : '') + '❌ ' + cleanError;
+            }
+
+            // Get captured output
+            const stdout = pyodide.runPython('_stdout_capture.getvalue()');
+            const stderr = pyodide.runPython('_stderr_capture.getvalue()');
+
+            let result = '';
+            if (stdout) result += stdout;
+            if (stderr) result += (result ? '\n' : '') + '⚠ ' + stderr;
+
+            return result || '(no output)';
+        } catch (error) {
+            setLoadStatus('');
+            if (error.message?.includes('Failed to load') || error.message?.includes('Timeout')) {
+                return '❌ Failed to load Python runtime.\nMake sure you have an internet connection.\nPyodide needs to download ~20MB on first use.';
+            }
+            return '❌ ' + error.message;
         }
     };
 
@@ -147,70 +239,15 @@ export default function CodeBlock({ node }) {
         setOutput('');
 
         try {
+            let result;
             if (content.language === 'javascript') {
-                // Run JavaScript
-                const logs = [];
-                const originalLog = console.log;
-                const originalError = console.error;
-
-                // Override console to capture output
-                console.log = (...args) => {
-                    logs.push(args.map(arg =>
-                        typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
-                    ).join(' '));
-                };
-
-                console.error = (...args) => {
-                    logs.push('ERROR: ' + args.join(' '));
-                };
-
-                try {
-                    // Execute code
-                    const result = eval(content.code);
-
-                    // If there's a return value, add it
-                    if (result !== undefined) {
-                        logs.push('→ ' + (typeof result === 'object' ? JSON.stringify(result, null, 2) : String(result)));
-                    }
-
-                    setOutput(logs.length > 0 ? logs.join('\n') : '(no output)');
-                } catch (error) {
-                    setOutput('Error: ' + error.message);
-                } finally {
-                    console.log = originalLog;
-                    console.error = originalError;
-                }
+                result = runJavaScript();
             } else if (content.language === 'python') {
-                // Run Python with Pyodide
-                try {
-                    const pyodide = await loadPyodide();
-
-                    // Redirect stdout and stderr
-                    await pyodide.runPythonAsync(`
-import sys
-from io import StringIO
-sys.stdout = StringIO()
-sys.stderr = StringIO()
-                    `);
-
-                    // Run user code
-                    await pyodide.runPythonAsync(content.code);
-
-                    // Get output
-                    const stdout = await pyodide.runPythonAsync('sys.stdout.getvalue()');
-                    const stderr = await pyodide.runPythonAsync('sys.stderr.getvalue()');
-
-                    let result = '';
-                    if (stdout) result += stdout;
-                    if (stderr) result += (result ? '\n' : '') + 'ERROR: ' + stderr;
-
-                    setOutput(result || '(no output)');
-                } catch (error) {
-                    setOutput('Error: ' + error.message);
-                }
+                result = await runPython();
             }
+            setOutput(result);
         } catch (error) {
-            setOutput('Error: ' + error.message);
+            setOutput('❌ ' + error.message);
         } finally {
             setIsRunning(false);
         }
@@ -239,29 +276,44 @@ sys.stderr = StringIO()
         <div className="h-full flex flex-col bg-gray-900 text-gray-100">
             {/* Header */}
             <div className="p-3 border-b border-gray-700 flex items-center justify-between bg-gray-800">
-                <select
-                    value={content.language}
-                    onChange={handleLanguageChange}
-                    className="px-3 py-1.5 rounded bg-gray-700 border border-gray-600 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                    {languages.map(lang => (
-                        <option key={lang.value} value={lang.value}>
-                            {lang.label} {lang.executable ? '⚡' : ''}
-                        </option>
-                    ))}
-                </select>
+                <div className="flex items-center gap-2">
+                    <select
+                        value={content.language}
+                        onChange={handleLanguageChange}
+                        className="px-3 py-1.5 rounded bg-gray-700 border border-gray-600 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                        {languages.map(lang => (
+                            <option key={lang.value} value={lang.value}>
+                                {lang.label}
+                            </option>
+                        ))}
+                    </select>
+                    {loadStatus && (
+                        <span className="text-xs text-yellow-400 flex items-center gap-1">
+                            <Loader size={12} className="animate-spin" />
+                            {loadStatus}
+                        </span>
+                    )}
+                </div>
 
                 <div className="flex gap-2">
-                    {isExecutable && (
-                        <button
-                            onClick={runCode}
-                            disabled={isRunning || pyodideLoading}
-                            className="px-3 py-1.5 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 rounded flex items-center gap-2 transition-colors text-sm"
-                        >
-                            <Play size={16} />
-                            {isRunning ? 'Running...' : pyodideLoading ? 'Loading...' : 'Run'}
-                        </button>
-                    )}
+                    <button
+                        onClick={runCode}
+                        disabled={isRunning}
+                        className="px-3 py-1.5 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded flex items-center gap-2 transition-colors text-sm font-medium"
+                    >
+                        {isRunning ? (
+                            <>
+                                <Loader size={16} className="animate-spin" />
+                                Running...
+                            </>
+                        ) : (
+                            <>
+                                <Play size={16} />
+                                Run
+                            </>
+                        )}
+                    </button>
                     <button
                         onClick={copyToClipboard}
                         className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded flex items-center gap-2 transition-colors text-sm"
@@ -325,7 +377,7 @@ sys.stderr = StringIO()
             {output && (
                 <div className="border-t border-gray-700 bg-gray-800">
                     <div className="p-2 flex items-center justify-between bg-gray-900 border-b border-gray-700">
-                        <span className="text-xs font-semibold text-gray-400">OUTPUT</span>
+                        <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Output</span>
                         <button
                             onClick={clearOutput}
                             className="p-1 hover:bg-gray-700 rounded transition-colors"
